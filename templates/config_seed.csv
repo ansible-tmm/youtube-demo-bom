@@ -1,4 +1,5 @@
 key,value
 channel_handle,ansibleautomation
 channel_id,
+auth_mode,auto
 include_scheduled,true

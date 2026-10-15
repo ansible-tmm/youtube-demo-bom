@@ -22,7 +22,7 @@ Full column ownership: [docs/COLUMN_CONTRACT.md](docs/COLUMN_CONTRACT.md).
 
 ### Auto vs human (summary)
 
-**Auto** (script / formulas): Video ID (append-only), Title, URL, Status, Published or scheduled at, Views, Likes, Comments, Duration, Last synced at.
+**Auto** (script / formulas): Video ID (append-only; hidden on BOM), Title, URL, Status, Published or scheduled at, Views, Likes, Comments, Duration, Feed synced at (same timestamp for the whole sync run).
 
 **Human** (never cleared by sync): Demo slug, Script / runbook URL, Repo path, Owner, Review status, Reviewed by, Reviewed on, Priority, Notes.
 
@@ -69,7 +69,13 @@ Attach the script to your Sheet if `clasp create` did not: Sheet → **Extension
 2. In that Cloud project, enable **YouTube Data API v3**.
 3. First run will prompt OAuth for Sheets + YouTube readonly.
 
-**Scheduled / private / unlisted videos:** run sync while signed in as a **channel owner or manager**. Viewers who are not on the channel typically only see public uploads.
+**Scheduled / private / unlisted videos:** owning the Google Sheet is not enough. The Google account that authorizes Apps Script must be a YouTube **owner/manager** of that channel, and sync must resolve via the managed (`mine`) auth path.
+
+1. **YouTube BOM → List my YouTube channels** — confirm the channel appears (with its `UC…` id).
+2. Paste that id into `_config` → `channel_id`, keep `auth_mode` = `auto` (or `mine`).
+3. Sync again. The success dialog shows `Auth path: mine (managed channel)` and a status breakdown (`scheduled=…`).
+
+If the channel is a **Brand Account** and does not appear under “List my YouTube channels,” re-run authorization as the account that manages that brand in YouTube Studio.
 
 ### 4. Configure the channel
 
@@ -78,7 +84,8 @@ Open the `_config` tab (created by **YouTube BOM → Ensure sheet structure**):
 | key | value |
 |-----|--------|
 | `channel_handle` | `ansibleautomation` |
-| `channel_id` | *(optional; overrides handle)* |
+| `channel_id` | *(optional but recommended — from List my YouTube channels)* |
+| `auth_mode` | `auto` |
 | `include_scheduled` | `true` |
 
 ### 5. Run sync

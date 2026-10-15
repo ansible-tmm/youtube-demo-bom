@@ -32,7 +32,7 @@ var CONFIG = {
     'Comments',
     'Duration',
     'Privacy',
-    'Last synced at'
+    'Feed synced at'
   ],
 
   /**
@@ -50,7 +50,7 @@ var CONFIG = {
     'Likes',
     'Comments',
     'Duration',
-    'Last synced at',
+    'Feed synced at',
     'Demo slug',
     'Script / runbook URL',
     'Repo path',
@@ -65,7 +65,7 @@ var CONFIG = {
   /** First human-owned column index on BOM (Demo slug). */
   BOM_HUMAN_START_COL: 10,
 
-  /** Number of auto formula columns after Video ID (Title … Last synced at). */
+  /** Number of auto formula columns after Video ID (Title … Feed synced at). */
   BOM_AUTO_FORMULA_COUNT: 9,
 
   REVIEW_STATUS_VALUES: ['Not started', 'In review', 'Approved']
@@ -74,7 +74,12 @@ var CONFIG = {
 /**
  * Read channel settings from the _config sheet.
  * Expected keys in column A, values in column B:
- *   channel_handle | channel_id | include_scheduled
+ *   channel_handle | channel_id | auth_mode | include_scheduled
+ *
+ * auth_mode:
+ *   auto   — prefer Channels.list(mine) when it matches handle/id (sees scheduled)
+ *   mine   — always use the authenticated user's matching managed channel
+ *   public — always resolve via handle/id (public videos only)
  */
 function getSyncConfig_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -82,6 +87,7 @@ function getSyncConfig_() {
   var out = {
     channelHandle: CONFIG.DEFAULT_CHANNEL_HANDLE,
     channelId: '',
+    authMode: 'auto',
     includeScheduled: true
   };
 
@@ -98,6 +104,8 @@ function getSyncConfig_() {
       out.channelHandle = val.replace(/^@/, '');
     } else if (key === 'channel_id' || key === 'id') {
       out.channelId = val;
+    } else if (key === 'auth_mode' || key === 'auth') {
+      out.authMode = val.toLowerCase() || 'auto';
     } else if (key === 'include_scheduled') {
       out.includeScheduled = /^(1|true|yes|y)$/i.test(val);
     }

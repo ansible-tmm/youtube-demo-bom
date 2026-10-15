@@ -27,7 +27,7 @@ This project uses **Pattern A**:
 | H | Comments | |
 | I | Duration | Clock form (`M:SS` or `H:MM:SS`) |
 | J | Privacy | Raw `privacyStatus` |
-| K | Last synced at | Timestamp of this sync run |
+| K | Feed synced at | Same timestamp on every row for this sync run (when the feed was refreshed) |
 
 Do not edit this tab by hand. Treat it as a disposable API dump.
 
@@ -50,7 +50,7 @@ Written **only when a new Video ID row is appended**. After that, values refresh
 | G | Likes |
 | H | Comments |
 | I | Duration |
-| J | Last synced at |
+| J | Feed synced at |
 
 ### Human (never auto-cleared)
 
@@ -79,8 +79,9 @@ Rows with a **blank Video ID** are checklist / script / planning items. Sync ign
 | key | value example | Notes |
 |-----|----------------|--------|
 | `channel_handle` | `ansibleautomation` | No leading `@` |
-| `channel_id` | `UCxxxxx` | Optional; wins over handle if set |
-| `include_scheduled` | `true` | Reserved; visibility still depends on OAuth identity |
+| `channel_id` | `UCxxxxx` | Optional; use the ID from **List my YouTube channels** for reliable matches |
+| `auth_mode` | `auto` | `auto` prefers managed (`mine`) match; `mine` forces it; `public` = handle lookup only |
+| `include_scheduled` | `true` | Scheduled/private only appear when auth path is managed (`mine`) |
 
 ---
 

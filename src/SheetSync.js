@@ -13,12 +13,14 @@ function ensureSheetStructure() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   ensureConfigSheet_(ss);
-  ensureHeaderSheet_(ss, CONFIG.SHEETS.RAW, CONFIG.RAW_HEADERS);
-  ensureHeaderSheet_(ss, CONFIG.SHEETS.BOM, CONFIG.BOM_HEADERS);
+  var raw = ensureHeaderSheet_(ss, CONFIG.SHEETS.RAW, CONFIG.RAW_HEADERS);
+  var bom = ensureHeaderSheet_(ss, CONFIG.SHEETS.BOM, CONFIG.BOM_HEADERS);
+  migrateLegacyHeaders_(raw, bom);
+  applyBomPresentation_(bom);
 
-  applyBomDataValidation_(ss.getSheetByName(CONFIG.SHEETS.BOM));
   SpreadsheetApp.getUi().alert(
-    'Sheet structure ready.\n\nTabs: _config, _youtube_raw, BOM'
+    'Sheet structure ready.\n\nTabs: _config, _youtube_raw, BOM\n' +
+      'Video ID column is hidden on BOM (unhide anytime via column menu).'
   );
 }
 
@@ -27,15 +29,30 @@ function ensureConfigSheet_(ss) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);
-    sheet.getRange(1, 1, 4, 2).setValues([
+    sheet.getRange(1, 1, 5, 2).setValues([
       ['key', 'value'],
       ['channel_handle', CONFIG.DEFAULT_CHANNEL_HANDLE],
       ['channel_id', ''],
+      ['auth_mode', 'auto'],
       ['include_scheduled', 'true']
     ]);
     sheet.getRange(1, 1, 1, 2).setFontWeight('bold');
     sheet.setColumnWidth(1, 180);
     sheet.setColumnWidth(2, 280);
+    return sheet;
+  }
+
+  // Ensure auth_mode row exists on older sheets.
+  var values = sheet.getDataRange().getValues();
+  var hasAuth = false;
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][0] || '').trim().toLowerCase() === 'auth_mode') {
+      hasAuth = true;
+      break;
+    }
+  }
+  if (!hasAuth) {
+    sheet.appendRow(['auth_mode', 'auto']);
   }
   return sheet;
 }
@@ -55,6 +72,36 @@ function ensureHeaderSheet_(ss, name, headers) {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+/**
+ * Rename legacy "Last synced at" header → "Feed synced at" if present.
+ */
+function migrateLegacyHeaders_(raw, bom) {
+  renameHeaderCell_(raw, 'Last synced at', 'Feed synced at');
+  renameHeaderCell_(bom, 'Last synced at', 'Feed synced at');
+}
+
+function renameHeaderCell_(sheet, fromLabel, toLabel) {
+  if (!sheet) return;
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  for (var i = 0; i < headers.length; i++) {
+    if (String(headers[i]).trim() === fromLabel) {
+      sheet.getRange(1, i + 1).setValue(toLabel);
+    }
+  }
+}
+
+function applyBomPresentation_(bom) {
+  if (!bom) return;
+  applyBomDataValidation_(bom);
+  // Stable key stays in col A for formulas; hide from humans.
+  try {
+    bom.hideColumns(1);
+  } catch (e) {
+    // ignore if already hidden / permission edge
+  }
 }
 
 function applyBomDataValidation_(bom) {
@@ -77,12 +124,20 @@ function syncYouTube() {
   ensureConfigSheet_(ss);
   var raw = ensureHeaderSheet_(ss, CONFIG.SHEETS.RAW, CONFIG.RAW_HEADERS);
   var bom = ensureHeaderSheet_(ss, CONFIG.SHEETS.BOM, CONFIG.BOM_HEADERS);
+  migrateLegacyHeaders_(raw, bom);
 
   var pulled = pullChannelVideos_();
   var rows = pulled.rows;
 
   replaceRawSheet_(raw, rows);
   var appended = appendNewBomRows_(bom, rows);
+  applyBomPresentation_(bom);
+
+  // Fix duration display on existing BOM formula rows (plain text).
+  var bomLast = bom.getLastRow();
+  if (bomLast >= 2) {
+    bom.getRange(2, 9, bomLast - 1, 1).setNumberFormat('@');
+  }
 
   var msg =
     'Synced ' +
@@ -90,15 +145,30 @@ function syncYouTube() {
     ' videos from "' +
     pulled.channel.title +
     '".\n' +
+    'Auth path: ' +
+    pulled.channel.authPath +
+    '\n' +
+    'Statuses: ' +
+    summarizeStatuses_(rows) +
+    '\n' +
     'Appended ' +
     appended +
     ' new BOM row(s).\n' +
     'Human columns and blank-Video-ID rows were left untouched.';
 
+  if (String(pulled.channel.authPath).indexOf('public') === 0) {
+    msg +=
+      '\n\nNo managed-channel match — scheduled/private are likely hidden.\n' +
+      'Run YouTube BOM → List my YouTube channels, set channel_id, set auth_mode=mine.';
+  }
+
   try {
-    SpreadsheetApp.getUi().alert('YouTube sync complete', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert(
+      'YouTube sync complete',
+      msg,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
   } catch (e) {
-    // Time-driven triggers have no UI.
     Logger.log(msg);
   }
 }
@@ -118,21 +188,21 @@ function replaceRawSheet_(raw, rows) {
     return;
   }
 
-  raw
-    .getRange(2, 1, rows.length, CONFIG.RAW_HEADERS.length)
-    .setValues(rows);
+  var range = raw.getRange(2, 1, rows.length, CONFIG.RAW_HEADERS.length);
+  // Duration column (I = 9) as plain text before write.
+  raw.getRange(2, 9, rows.length, 1).setNumberFormat('@');
+  range.setValues(rows);
 
-  // Format date columns: Published (E=5), Last synced (K=11)
+  // Published (E=5), Feed synced (K=11)
   raw.getRange(2, 5, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
   raw.getRange(2, 11, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
 }
 
 /**
  * Append BOM rows for video IDs not already present.
- * Rows with blank Video ID are ignored forever (checklist items).
  * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
  * @param {Array[]} rawRows
- * @return {number} count appended
+ * @return {number}
  */
 function appendNewBomRows_(bom, rawRows) {
   var existing = collectBomVideoIds_(bom);
@@ -162,36 +232,30 @@ function appendNewBomRows_(bom, rawRows) {
       row[c] = '';
     }
     row[0] = toAppend[j];
-    // Auto columns 1–9: live XLOOKUP into _youtube_raw (same column order for Title…Duration;
-    // Last synced at maps to raw col 11 / index 10).
-    row[1] = bomLookupFormula_(rowNum, 2); // Title → raw B
-    row[2] = bomLookupFormula_(rowNum, 3); // URL → raw C
-    row[3] = bomLookupFormula_(rowNum, 4); // Status → raw D
-    row[4] = bomLookupFormula_(rowNum, 5); // Published → raw E
-    row[5] = bomLookupFormula_(rowNum, 6); // Views → raw F
-    row[6] = bomLookupFormula_(rowNum, 7); // Likes → raw G
-    row[7] = bomLookupFormula_(rowNum, 8); // Comments → raw H
-    row[8] = bomLookupFormula_(rowNum, 9); // Duration → raw I
-    row[9] = bomLookupFormula_(rowNum, 11); // Last synced → raw K
+    row[1] = bomLookupFormula_(rowNum, 2);
+    row[2] = bomLookupFormula_(rowNum, 3);
+    row[3] = bomLookupFormula_(rowNum, 4);
+    row[4] = bomLookupFormula_(rowNum, 5);
+    row[5] = bomLookupFormula_(rowNum, 6);
+    row[6] = bomLookupFormula_(rowNum, 7);
+    row[7] = bomLookupFormula_(rowNum, 8);
+    row[8] = bomLookupFormula_(rowNum, 9);
+    row[9] = bomLookupFormula_(rowNum, 11);
     values.push(row);
   }
 
   bom.getRange(startRow, 1, toAppend.length, width).setValues(values);
-  bom
-    .getRange(startRow, 5, toAppend.length, 1)
-    .setNumberFormat('yyyy-mm-dd hh:mm');
-  bom
-    .getRange(startRow, 10, toAppend.length, 1)
-    .setNumberFormat('yyyy-mm-dd hh:mm');
+  bom.getRange(startRow, 5, toAppend.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  bom.getRange(startRow, 9, toAppend.length, 1).setNumberFormat('@');
+  bom.getRange(startRow, 10, toAppend.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
 
   applyBomDataValidation_(bom);
   return toAppend.length;
 }
 
 /**
- * XLOOKUP formula: Video ID in column A → column colIndex (1-based) on _youtube_raw.
- * @param {number} rowNum BOM row number
- * @param {number} rawColIndex 1-based column on _youtube_raw
+ * @param {number} rowNum
+ * @param {number} rawColIndex 1-based
  * @return {string}
  */
 function bomLookupFormula_(rowNum, rawColIndex) {
