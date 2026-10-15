@@ -15,11 +15,13 @@ function ensureSheetStructure() {
   ensureConfigSheet_(ss);
   var raw = ensureHeaderSheet_(ss, CONFIG.SHEETS.RAW, CONFIG.RAW_HEADERS);
   var bom = ensureHeaderSheet_(ss, CONFIG.SHEETS.BOM, CONFIG.BOM_HEADERS);
+  ensureHeaderSheet_(ss, CONFIG.SHEETS.EXTRA_IDS, CONFIG.EXTRA_ID_HEADERS);
   migrateLegacyHeaders_(raw, bom);
   applyBomPresentation_(bom);
 
   SpreadsheetApp.getUi().alert(
-    'Sheet structure ready.\n\nTabs: _config, _youtube_raw, BOM\n' +
+    'Sheet structure ready.\n\nTabs: _config, _youtube_raw, BOM, _extra_video_ids\n' +
+      'For scheduled videos (Brand Account): paste Studio video IDs/URLs into _extra_video_ids.\n' +
       'Video ID column is hidden on BOM (unhide anytime via column menu).'
   );
 }
@@ -124,6 +126,7 @@ function syncYouTube() {
   ensureConfigSheet_(ss);
   var raw = ensureHeaderSheet_(ss, CONFIG.SHEETS.RAW, CONFIG.RAW_HEADERS);
   var bom = ensureHeaderSheet_(ss, CONFIG.SHEETS.BOM, CONFIG.BOM_HEADERS);
+  ensureHeaderSheet_(ss, CONFIG.SHEETS.EXTRA_IDS, CONFIG.EXTRA_ID_HEADERS);
   migrateLegacyHeaders_(raw, bom);
 
   var pulled = pullChannelVideos_();
@@ -151,6 +154,11 @@ function syncYouTube() {
     'Statuses: ' +
     summarizeStatuses_(rows) +
     '\n' +
+    'Extra IDs requested/resolved: ' +
+    (pulled.channel.extraRequested || 0) +
+    '/' +
+    (pulled.channel.extraResolved || 0) +
+    '\n' +
     'Appended ' +
     appended +
     ' new BOM row(s).\n' +
@@ -158,8 +166,19 @@ function syncYouTube() {
 
   if (String(pulled.channel.authPath).indexOf('public') === 0) {
     msg +=
-      '\n\nNo managed-channel match — scheduled/private are likely hidden.\n' +
-      'Run YouTube BOM → List my YouTube channels, set channel_id, set auth_mode=mine.';
+      '\n\nBrand Account note: Apps Script OAuth cannot switch into the brand,' +
+      '\nso the uploads playlist stays public-only even if you are Primary owner.' +
+      '\nPaste scheduled Studio URLs into _extra_video_ids, then Sync again.' +
+      '\n(Or use scripts/sync_youtube_brand.py and pick the brand in the browser.)';
+  }
+
+  if (
+    (pulled.channel.extraRequested || 0) > 0 &&
+    (pulled.channel.extraResolved || 0) < (pulled.channel.extraRequested || 0)
+  ) {
+    msg +=
+      '\n\nSome _extra_video_ids did not resolve. Confirm the ID is correct' +
+      '\nand that this Google account can open that video in Studio.';
   }
 
   try {

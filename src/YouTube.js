@@ -332,13 +332,34 @@ function summarizeStatuses_(rows) {
 
 /**
  * Pull all videos for the configured channel.
- * @return {{channel: Object, rows: Array[]}}
+ * Merges IDs from _extra_video_ids (scheduled/private Brand Account workaround).
+ * @return {{channel: Object, rows: Array[], extraRequested: number, extraResolved: number}}
  */
 function pullChannelVideos_() {
   var cfg = getSyncConfig_();
   var channel = resolveChannel_(cfg);
   var ids = listUploadVideoIds_(channel.uploadsPlaylistId);
-  var rows = fetchVideoDetails_(ids);
+
+  var extraIds = loadExtraVideoIds_();
+  var seen = {};
+  for (var i = 0; i < ids.length; i++) {
+    seen[ids[i]] = true;
+  }
+  var merged = ids.slice();
+  for (var e = 0; e < extraIds.length; e++) {
+    if (!seen[extraIds[e]]) {
+      seen[extraIds[e]] = true;
+      merged.push(extraIds[e]);
+    }
+  }
+
+  var rows = fetchVideoDetails_(merged);
+  var resolvedExtra = 0;
+  for (var r = 0; r < rows.length; r++) {
+    if (extraIds.indexOf(rows[r][0]) !== -1) {
+      resolvedExtra++;
+    }
+  }
 
   rows.sort(function (a, b) {
     var da = a[4] ? new Date(a[4]).getTime() : 0;
@@ -346,5 +367,31 @@ function pullChannelVideos_() {
     return db - da;
   });
 
+  channel.extraRequested = extraIds.length;
+  channel.extraResolved = resolvedExtra;
+
   return { channel: channel, rows: rows };
+}
+
+/**
+ * Video IDs / Studio URLs from the _extra_video_ids tab.
+ * @return {string[]}
+ */
+function loadExtraVideoIds_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.EXTRA_IDS);
+  if (!sheet) {
+    return [];
+  }
+  var values = sheet.getDataRange().getValues();
+  var ids = [];
+  var seen = {};
+  for (var i = 1; i < values.length; i++) {
+    var id = extractVideoId_(String(values[i][0] || ''));
+    if (id && !seen[id]) {
+      seen[id] = true;
+      ids.push(id);
+    }
+  }
+  return ids;
 }

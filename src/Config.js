@@ -11,8 +11,12 @@ var CONFIG = {
   SHEETS: {
     CONFIG: '_config',
     RAW: '_youtube_raw',
-    BOM: 'BOM'
+    BOM: 'BOM',
+    /** Paste scheduled/private video IDs or Studio URLs here (Brand Account workaround). */
+    EXTRA_IDS: '_extra_video_ids'
   },
+
+  EXTRA_ID_HEADERS: ['video_id_or_url', 'notes'],
 
   /** Default channel when _config is empty. Override in the _config tab. */
   DEFAULT_CHANNEL_HANDLE: 'ansibleautomation',

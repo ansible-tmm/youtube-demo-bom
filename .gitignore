@@ -4,6 +4,8 @@
 !.env.example
 credentials.json
 token.json
+scripts/token.json
+scripts/client_secret.json
 *.pem
 *.p12
 client_secret*.json

@@ -69,13 +69,23 @@ Attach the script to your Sheet if `clasp create` did not: Sheet → **Extension
 2. In that Cloud project, enable **YouTube Data API v3**.
 3. First run will prompt OAuth for Sheets + YouTube readonly.
 
-**Scheduled / private / unlisted videos:** owning the Google Sheet is not enough. The Google account that authorizes Apps Script must be a YouTube **owner/manager** of that channel, and sync must resolve via the managed (`mine`) auth path.
+**Scheduled / private videos (Brand Accounts):** Being **Primary owner** in Studio is not enough for Apps Script. Apps Script OAuth has **no Brand Account picker**, so `mine=true` often returns only your personal channel (e.g. `@seancavanaugh3817`) while the brand uploads playlist stays **public-only**.
 
-1. **YouTube BOM → List my YouTube channels** — confirm the channel appears (with its `UC…` id).
-2. Paste that id into `_config` → `channel_id`, keep `auth_mode` = `auto` (or `mine`).
-3. Sync again. The success dialog shows `Auth path: mine (managed channel)` and a status breakdown (`scheduled=…`).
+### Workaround A — paste scheduled IDs (Apps Script)
 
-If the channel is a **Brand Account** and does not appear under “List my YouTube channels,” re-run authorization as the account that manages that brand in YouTube Studio.
+1. YouTube Studio → scheduled video → copy ID from the URL (`…/video/VIDEO_ID/edit`).
+2. **YouTube BOM → Add scheduled video IDs…** (or paste into `_extra_video_ids`).
+3. **Sync YouTube** — dialog shows `Extra IDs requested/resolved` and ideally `scheduled=…`.
+
+### Workaround B — Python OAuth (pick the brand in the browser)
+
+```bash
+pip install -r scripts/requirements-sync.txt
+# place Desktop OAuth client JSON at scripts/client_secret.json
+python3 scripts/sync_youtube_brand.py --channel-id UCPJo5UY1KsP7J1BuHmiWNzQ
+```
+
+In the browser consent screen, choose **The Ansible Playbook** if listed as a Brand Account identity.
 
 ### 4. Configure the channel
 

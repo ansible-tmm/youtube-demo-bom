@@ -9,6 +9,7 @@ function onOpen() {
     .addItem('Ensure sheet structure', 'ensureSheetStructure')
     .addSeparator()
     .addItem('List my YouTube channels', 'listMyYouTubeChannels')
+    .addItem('Add scheduled video IDs…', 'promptAddExtraVideoIds')
     .addItem('Suggest demo slugs (from DemoMap)', 'suggestDemoSlugs')
     .addSeparator()
     .addItem('Install hourly sync trigger', 'installHourlyTrigger')
