@@ -17,6 +17,9 @@ var CONFIG = {
   /** Default channel when _config is empty. Override in the _config tab. */
   DEFAULT_CHANNEL_HANDLE: 'ansibleautomation',
 
+  /** The Ansible Playbook — set in _config for reliable sync (Brand Account). */
+  DEFAULT_CHANNEL_ID: 'UCPJo5UY1KsP7J1BuHmiWNzQ',
+
   /**
    * _youtube_raw columns (0-based). Full replace every sync.
    * Header row must match RAW_HEADERS exactly.
@@ -86,7 +89,7 @@ function getSyncConfig_() {
   var sheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
   var out = {
     channelHandle: CONFIG.DEFAULT_CHANNEL_HANDLE,
-    channelId: '',
+    channelId: CONFIG.DEFAULT_CHANNEL_ID,
     authMode: 'auto',
     includeScheduled: true
   };

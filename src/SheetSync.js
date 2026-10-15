@@ -32,7 +32,7 @@ function ensureConfigSheet_(ss) {
     sheet.getRange(1, 1, 5, 2).setValues([
       ['key', 'value'],
       ['channel_handle', CONFIG.DEFAULT_CHANNEL_HANDLE],
-      ['channel_id', ''],
+      ['channel_id', CONFIG.DEFAULT_CHANNEL_ID],
       ['auth_mode', 'auto'],
       ['include_scheduled', 'true']
     ]);
