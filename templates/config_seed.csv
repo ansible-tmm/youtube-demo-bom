@@ -1,0 +1,4 @@
+key,value
+channel_handle,ansibleautomation
+channel_id,
+include_scheduled,true
