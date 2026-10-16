@@ -87,12 +87,24 @@ function authorizeBrandYouTube() {
       '<p style="margin-top:16px"><a href="' +
       url +
       '" target="_blank" style="font-size:14px">Authorize YouTube (Brand Account)</a></p>' +
+      '<p style="font-size:11px;word-break:break-all;color:#555">' +
+      url +
+      '</p>' +
       '</div>'
   )
-    .setWidth(480)
-    .setHeight(280);
+    .setWidth(520)
+    .setHeight(320);
 
-  SpreadsheetApp.getUi().showModalDialog(html, 'YouTube Brand OAuth');
+  try {
+    SpreadsheetApp.getUi().showModalDialog(html, 'YouTube Brand OAuth');
+  } catch (e) {
+    // Fallback if script.container.ui scope is missing / not yet re-authorized.
+    SpreadsheetApp.getUi().alert(
+      'Open this URL in a new tab to authorize the Brand Account:\n\n' +
+        url +
+        '\n\nAfter Allow, return here → List Brand OAuth channels.'
+    );
+  }
 }
 
 /**
