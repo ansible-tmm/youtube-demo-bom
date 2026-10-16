@@ -10,6 +10,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Authorize Brand YouTube Account', 'authorizeBrandYouTube')
     .addItem('Show Brand OAuth redirect URI', 'showBrandOAuthRedirectUri')
+    // prepareBrandYouTubeAuth is editor-only (no menu) — Run it in Apps Script to grant scopes.
     .addItem('List Brand OAuth channels', 'listBrandYouTubeChannels')
     .addItem('Reset Brand YouTube auth', 'resetBrandYouTubeAuth')
     .addSeparator()

@@ -86,50 +86,75 @@ function showBrandOAuthRedirectUri() {
 }
 
 /**
+ * Editor-safe: grants script scopes + logs the Brand auth URL (no Sheet UI).
+ * Run this from Apps Script if you only need to click through "Allow".
+ */
+function prepareBrandYouTubeAuth() {
+  var service = getBrandYouTubeService_();
+  if (service.hasAccess()) {
+    Logger.log('Brand YouTube already authorized.');
+    return 'already authorized';
+  }
+  var url = service.getAuthorizationUrl();
+  Logger.log('Open this URL to authorize Brand YouTube:\n' + url);
+  return url;
+}
+
+/**
  * Menu: open browser auth so you can pick The Ansible Playbook brand.
+ * Run from the Sheet menu (not the Apps Script editor) so UI dialogs work.
  */
 function authorizeBrandYouTube() {
   var service = getBrandYouTubeService_();
 
   if (service.hasAccess()) {
-    var summary = summarizeBrandTokenChannels_();
-    SpreadsheetApp.getUi().alert(
+    uiAlert_(
       'Brand YouTube already authorized.\n\n' +
-        summary +
+        summarizeBrandTokenChannels_() +
         '\n\nTo re-pick the brand: YouTube BOM → Reset Brand YouTube auth, then Authorize again.'
     );
     return;
   }
 
   var url = service.getAuthorizationUrl();
-  var html = HtmlService.createHtmlOutput(
-    '<div style="font-family:Arial,sans-serif;padding:12px;line-height:1.5">' +
-      '<p><b>Authorize Brand Account</b></p>' +
-      '<p>1. Click the link below (opens a new tab).</p>' +
-      '<p>2. Sign in with your <b>redhat.com</b> account.</p>' +
-      '<p>3. If Google shows multiple accounts/channels, choose ' +
-      '<b>The Ansible Playbook</b> (Brand Account) — not only your personal channel.</p>' +
-      '<p>4. Click Allow, then return here and run <b>Sync YouTube</b>.</p>' +
-      '<p style="margin-top:16px"><a href="' +
-      url +
-      '" target="_blank" style="font-size:14px">Authorize YouTube (Brand Account)</a></p>' +
-      '<p style="font-size:11px;word-break:break-all;color:#555">' +
-      url +
-      '</p>' +
-      '</div>'
-  )
-    .setWidth(520)
-    .setHeight(320);
-
   try {
+    var html = HtmlService.createHtmlOutput(
+      '<div style="font-family:Arial,sans-serif;padding:12px;line-height:1.5">' +
+        '<p><b>Authorize Brand Account</b></p>' +
+        '<p>1. Click the link below (opens a new tab).</p>' +
+        '<p>2. Sign in with your <b>redhat.com</b> account.</p>' +
+        '<p>3. If Google shows multiple accounts/channels, choose ' +
+        '<b>The Ansible Playbook</b> (Brand Account) — not only your personal channel.</p>' +
+        '<p>4. Click Allow, then return here and run <b>Sync YouTube</b>.</p>' +
+        '<p style="margin-top:16px"><a href="' +
+        url +
+        '" target="_blank" style="font-size:14px">Authorize YouTube (Brand Account)</a></p>' +
+        '<p style="font-size:11px;word-break:break-all;color:#555">' +
+        url +
+        '</p>' +
+        '</div>'
+    )
+      .setWidth(520)
+      .setHeight(320);
     SpreadsheetApp.getUi().showModalDialog(html, 'YouTube Brand OAuth');
   } catch (e) {
-    // Fallback if script.container.ui scope is missing / not yet re-authorized.
-    SpreadsheetApp.getUi().alert(
+    // Editor / missing UI scope: log URL instead of hanging.
+    Logger.log('Brand auth URL:\n' + url);
+    uiAlert_(
       'Open this URL in a new tab to authorize the Brand Account:\n\n' +
         url +
-        '\n\nAfter Allow, return here → List Brand OAuth channels.'
+        '\n\nAfter Allow, return here → List Brand OAuth channels.\n\n' +
+        '(If this alert did not appear, open Executions → view log for the URL.)'
     );
+  }
+}
+
+/** @param {string} message */
+function uiAlert_(message) {
+  try {
+    SpreadsheetApp.getUi().alert(message);
+  } catch (e) {
+    Logger.log(message);
   }
 }
 
