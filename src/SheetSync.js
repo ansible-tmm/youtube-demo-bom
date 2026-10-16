@@ -164,12 +164,14 @@ function syncYouTube() {
     ' new BOM row(s).\n' +
     'Human columns and blank-Video-ID rows were left untouched.';
 
-  if (String(pulled.channel.authPath).indexOf('public') === 0) {
+  if (String(pulled.channel.authPath).indexOf('brand-oauth') === 0) {
+    // ok
+  } else if (String(pulled.channel.authPath).indexOf('public') === 0) {
     msg +=
-      '\n\nBrand Account note: Apps Script OAuth cannot switch into the brand,' +
-      '\nso the uploads playlist stays public-only even if you are Primary owner.' +
-      '\nPaste scheduled Studio URLs into _extra_video_ids, then Sync again.' +
-      '\n(Or use scripts/sync_youtube_brand.py and pick the brand in the browser.)';
+      '\n\nStill on public path. For scheduled videos:' +
+      '\nYouTube BOM → Authorize Brand YouTube Account' +
+      '\n(pick The Ansible Playbook in the browser), then Sync again.' +
+      '\nSee docs/BRAND_OAUTH_SETUP.md';
   }
 
   if (

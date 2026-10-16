@@ -337,8 +337,17 @@ function summarizeStatuses_(rows) {
  */
 function pullChannelVideos_() {
   var cfg = getSyncConfig_();
-  var channel = resolveChannel_(cfg);
-  var ids = listUploadVideoIds_(channel.uploadsPlaylistId);
+  var channel;
+  var ids;
+  var useBrand = hasBrandYouTubeAuth_();
+
+  if (useBrand) {
+    channel = resolveChannelBrandHttp_(cfg);
+    ids = listUploadVideoIdsHttp_(channel.uploadsPlaylistId);
+  } else {
+    channel = resolveChannel_(cfg);
+    ids = listUploadVideoIds_(channel.uploadsPlaylistId);
+  }
 
   var extraIds = loadExtraVideoIds_();
   var seen = {};
@@ -353,7 +362,10 @@ function pullChannelVideos_() {
     }
   }
 
-  var rows = fetchVideoDetails_(merged);
+  var rows = useBrand
+    ? fetchVideoDetailsHttp_(merged)
+    : fetchVideoDetails_(merged);
+
   var resolvedExtra = 0;
   for (var r = 0; r < rows.length; r++) {
     if (extraIds.indexOf(rows[r][0]) !== -1) {

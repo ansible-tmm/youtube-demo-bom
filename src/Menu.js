@@ -8,7 +8,11 @@ function onOpen() {
     .addItem('Sync YouTube', 'syncYouTube')
     .addItem('Ensure sheet structure', 'ensureSheetStructure')
     .addSeparator()
-    .addItem('List my YouTube channels', 'listMyYouTubeChannels')
+    .addItem('Authorize Brand YouTube Account', 'authorizeBrandYouTube')
+    .addItem('List Brand OAuth channels', 'listBrandYouTubeChannels')
+    .addItem('Reset Brand YouTube auth', 'resetBrandYouTubeAuth')
+    .addSeparator()
+    .addItem('List my YouTube channels (built-in)', 'listMyYouTubeChannels')
     .addItem('Add scheduled video IDs…', 'promptAddExtraVideoIds')
     .addItem('Suggest demo slugs (from DemoMap)', 'suggestDemoSlugs')
     .addSeparator()
@@ -19,14 +23,14 @@ function onOpen() {
 
 /**
  * Create a time-driven trigger that calls syncYouTube every hour.
- * Requires the user who installs it to have authorized YouTube + Sheets.
+ * Requires Brand OAuth (recommended) or built-in auth still valid.
  */
 function installHourlyTrigger() {
   removeSyncTriggers();
   ScriptApp.newTrigger('syncYouTube').timeBased().everyHours(1).create();
   SpreadsheetApp.getUi().alert(
     'Hourly trigger installed.\n\n' +
-      'It runs as you; keep YouTube authorization valid.\n' +
+      'Prefer Brand OAuth so scheduled videos keep syncing.\n' +
       'Use "Remove sync triggers" to disable.'
   );
 }

@@ -1,0 +1,165 @@
+/**
+ * Method 3: OAuth2 for Brand Account YouTube access.
+ *
+ * Apps Script's built-in "Allow" cannot pick a Brand Account identity.
+ * This uses the OAuth2 library + a Cloud OAuth client so the browser
+ * account chooser can include "The Ansible Playbook".
+ *
+ * Setup: see docs/BRAND_OAUTH_SETUP.md
+ * Library: OAuth2 (1B7FSrk5Zi6L1rSxxTDgDEUsPokyzqmevQ9RP8eGCMvndRAWP1xd9xgHC)
+ *
+ * Script properties (Project Settings → Script properties):
+ *   YOUTUBE_OAUTH_CLIENT_ID
+ *   YOUTUBE_OAUTH_CLIENT_SECRET
+ */
+
+var BRAND_OAUTH_SERVICE_NAME = 'youtube-brand';
+var BRAND_OAUTH_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
+
+/**
+ * @return {GoogleAppsScriptOAuth2.OAuth2Service}
+ */
+function getBrandYouTubeService_() {
+  var props = PropertiesService.getScriptProperties();
+  var clientId = props.getProperty('YOUTUBE_OAUTH_CLIENT_ID');
+  var clientSecret = props.getProperty('YOUTUBE_OAUTH_CLIENT_SECRET');
+
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'Missing YOUTUBE_OAUTH_CLIENT_ID / YOUTUBE_OAUTH_CLIENT_SECRET.\n' +
+        'Set them under Apps Script → Project Settings → Script properties.\n' +
+        'See docs/BRAND_OAUTH_SETUP.md'
+    );
+  }
+
+  return OAuth2.createService(BRAND_OAUTH_SERVICE_NAME)
+    .setAuthorizationBaseUrl('https://accounts.google.com/o/oauth2/v2/auth')
+    .setTokenUrl('https://oauth2.googleapis.com/token')
+    .setClientId(clientId)
+    .setClientSecret(clientSecret)
+    .setCallbackFunction('brandAuthCallback')
+    .setPropertyStore(PropertiesService.getUserProperties())
+    .setCache(CacheService.getUserCache())
+    .setLock(LockService.getUserLock())
+    .setScope(BRAND_OAUTH_SCOPE)
+    .setParam('access_type', 'offline')
+    // select_account: show chooser (pick Brand Account / Playbook)
+    // consent: force refresh token issuance
+    .setParam('prompt', 'select_account consent');
+}
+
+/** True when a brand (or user) YouTube token is stored and usable. */
+function hasBrandYouTubeAuth_() {
+  try {
+    return getBrandYouTubeService_().hasAccess();
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Menu: open browser auth so you can pick The Ansible Playbook brand.
+ */
+function authorizeBrandYouTube() {
+  var service = getBrandYouTubeService_();
+
+  if (service.hasAccess()) {
+    var summary = summarizeBrandTokenChannels_();
+    SpreadsheetApp.getUi().alert(
+      'Brand YouTube already authorized.\n\n' +
+        summary +
+        '\n\nTo re-pick the brand: YouTube BOM → Reset Brand YouTube auth, then Authorize again.'
+    );
+    return;
+  }
+
+  var url = service.getAuthorizationUrl();
+  var html = HtmlService.createHtmlOutput(
+    '<div style="font-family:Arial,sans-serif;padding:12px;line-height:1.5">' +
+      '<p><b>Authorize Brand Account</b></p>' +
+      '<p>1. Click the link below (opens a new tab).</p>' +
+      '<p>2. Sign in with your <b>redhat.com</b> account.</p>' +
+      '<p>3. If Google shows multiple accounts/channels, choose ' +
+      '<b>The Ansible Playbook</b> (Brand Account) — not only your personal channel.</p>' +
+      '<p>4. Click Allow, then return here and run <b>Sync YouTube</b>.</p>' +
+      '<p style="margin-top:16px"><a href="' +
+      url +
+      '" target="_blank" style="font-size:14px">Authorize YouTube (Brand Account)</a></p>' +
+      '</div>'
+  )
+    .setWidth(480)
+    .setHeight(280);
+
+  SpreadsheetApp.getUi().showModalDialog(html, 'YouTube Brand OAuth');
+}
+
+/**
+ * OAuth2 library callback (must stay named to match setCallbackFunction).
+ * @param {Object} request
+ * @return {GoogleAppsScript.HTML.HtmlOutput}
+ */
+function brandAuthCallback(request) {
+  var service = getBrandYouTubeService_();
+  var ok = service.handleCallback(request);
+  var body = ok
+    ? '<p>Authorization successful. You can close this tab and return to the Sheet.</p>' +
+      '<p>Next: YouTube BOM → Sync YouTube (look for Auth path: brand-oauth).</p>'
+    : '<p>Authorization denied. Close this tab and try again.</p>';
+  return HtmlService.createHtmlOutput(body);
+}
+
+/** Menu: clear stored brand token. */
+function resetBrandYouTubeAuth() {
+  try {
+    getBrandYouTubeService_().reset();
+  } catch (e) {
+    // still ok
+  }
+  SpreadsheetApp.getUi().alert(
+    'Brand YouTube auth cleared.\n\nRun Authorize Brand YouTube Account again.'
+  );
+}
+
+/**
+ * Menu: show channels visible to the brand OAuth token (mine=true).
+ */
+function listBrandYouTubeChannels() {
+  if (!hasBrandYouTubeAuth_()) {
+    SpreadsheetApp.getUi().alert(
+      'Brand YouTube is not authorized yet.\n\n' +
+        'Run YouTube BOM → Authorize Brand YouTube Account first.'
+    );
+    return;
+  }
+  SpreadsheetApp.getUi().alert(summarizeBrandTokenChannels_());
+}
+
+/**
+ * @return {string}
+ */
+function summarizeBrandTokenChannels_() {
+  var data = youtubeHttpGet_('channels', {
+    part: 'snippet,contentDetails',
+    mine: 'true',
+    maxResults: '50'
+  });
+  var items = data.items || [];
+  if (!items.length) {
+    return (
+      'Brand token has access, but mine=true returned no channels.\n' +
+      'Reset auth and pick The Ansible Playbook in the account chooser.'
+    );
+  }
+  var lines = ['Channels visible to Brand OAuth token (mine=true):', ''];
+  for (var i = 0; i < items.length; i++) {
+    var sn = items[i].snippet || {};
+    lines.push(
+      (sn.title || '') +
+        ' | @' +
+        (sn.customUrl || '(no handle)') +
+        ' | ' +
+        items[i].id
+    );
+  }
+  return lines.join('\n');
+}
