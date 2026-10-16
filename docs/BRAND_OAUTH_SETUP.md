@@ -43,13 +43,15 @@ In Apps Script → **Project Settings → Script properties** → add:
 | `YOUTUBE_OAUTH_CLIENT_ID` | *(client id)* |
 | `YOUTUBE_OAUTH_CLIENT_SECRET` | *(client secret)* |
 
-## Step E — Code + OAuth2 library
+## Step E — Code (OAuth2 is vendored — no Libraries UI)
 
-1. Paste/update repo files including `BrandOAuth.js`, `YouTubeHttp.js`, `Menu.js`, `YouTube.js`, `appsscript.json`.
-2. Confirm library **OAuth2** appears under **Libraries** (or add manually):
-   - Script ID: `1B7FSrk5Zi6L1rSxxTDgDEUsPokyzqmevQ9RP8eGCMvndRAWP1xd9xgHC`
-   - Identifier: `OAuth2`
-   - Version: latest (repo pins `43`)
+Paste/update these from the repo (do **not** add the external OAuth2 library;
+Red Hat orgs often block Library lookup):
+
+- `BrandOAuth.js`, `YouTubeHttp.js`, `Menu.js`, `YouTube.js`, `SheetSync.js`
+- `OAuth2.js`, `OAuth2Service.js`, `OAuth2Storage.js`, `OAuth2Utilities.js`
+  (Apache-2.0, from [apps-script-oauth2](https://github.com/googleworkspace/apps-script-oauth2))
+- `appsscript.json` (no `libraries` block)
 
 ## Step F — Authorize brand + sync
 

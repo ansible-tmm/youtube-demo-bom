@@ -6,7 +6,9 @@
  * account chooser can include "The Ansible Playbook".
  *
  * Setup: see docs/BRAND_OAUTH_SETUP.md
- * Library: OAuth2 (1B7FSrk5Zi6L1rSxxTDgDEUsPokyzqmevQ9RP8eGCMvndRAWP1xd9xgHC)
+ *
+ * OAuth2 is vendored in this project (OAuth2.js + OAuth2Service.js +
+ * OAuth2Storage.js + OAuth2Utilities.js) because some orgs block Libraries.
  *
  * Script properties (Project Settings → Script properties):
  *   YOUTUBE_OAUTH_CLIENT_ID
