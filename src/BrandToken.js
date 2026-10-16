@@ -17,7 +17,7 @@ var BRAND_TOKEN_CACHE_KEY = 'brand_yt_access_token';
  */
 function hasBrandYouTubeAuth_() {
   var props = PropertiesService.getScriptProperties();
-  if (props.getProperty('YOUTUBE_BRAND_REFRESH_TOKEN')) {
+  if (prop_(props, 'YOUTUBE_BRAND_REFRESH_TOKEN')) {
     return true;
   }
   try {
@@ -28,11 +28,50 @@ function hasBrandYouTubeAuth_() {
 }
 
 /**
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @param {string} key
+ * @return {string}
+ */
+function prop_(props, key) {
+  return String(props.getProperty(key) || '').trim();
+}
+
+/**
+ * Menu: show lengths only (no secrets) to catch truncated Script properties.
+ * Expected approx: client_id=72, client_secret=35, refresh_token=103
+ */
+function debugBrandAuthPropertyLengths() {
+  var props = PropertiesService.getScriptProperties();
+  var clientId = prop_(props, 'YOUTUBE_OAUTH_CLIENT_ID');
+  var clientSecret = prop_(props, 'YOUTUBE_OAUTH_CLIENT_SECRET');
+  var refresh = prop_(props, 'YOUTUBE_BRAND_REFRESH_TOKEN');
+  uiAlert_(
+    'Script property lengths (after trim):\n\n' +
+      'YOUTUBE_OAUTH_CLIENT_ID: ' +
+      clientId.length +
+      ' (expect ~72, ends with .apps.googleusercontent.com: ' +
+      /\.apps\.googleusercontent\.com$/.test(clientId) +
+      ')\n' +
+      'YOUTUBE_OAUTH_CLIENT_SECRET: ' +
+      clientSecret.length +
+      ' (expect ~35, starts with GOCSPX-: ' +
+      /^GOCSPX-/.test(clientSecret) +
+      ')\n' +
+      'YOUTUBE_BRAND_REFRESH_TOKEN: ' +
+      refresh.length +
+      ' (expect ~103, starts with 1//: ' +
+      /^1\/\//.test(refresh) +
+      ')\n\n' +
+      'If any length is far short, re-paste the full value.'
+  );
+}
+
+/**
  * @return {string} Bearer access token
  */
 function getBrandAccessToken_() {
   var props = PropertiesService.getScriptProperties();
-  var refresh = props.getProperty('YOUTUBE_BRAND_REFRESH_TOKEN');
+  var refresh = prop_(props, 'YOUTUBE_BRAND_REFRESH_TOKEN');
 
   if (refresh) {
     var cache = CacheService.getScriptCache();
@@ -41,8 +80,8 @@ function getBrandAccessToken_() {
       return cached;
     }
 
-    var clientId = props.getProperty('YOUTUBE_OAUTH_CLIENT_ID');
-    var clientSecret = props.getProperty('YOUTUBE_OAUTH_CLIENT_SECRET');
+    var clientId = prop_(props, 'YOUTUBE_OAUTH_CLIENT_ID');
+    var clientSecret = prop_(props, 'YOUTUBE_OAUTH_CLIENT_SECRET');
     if (!clientId || !clientSecret) {
       throw new Error(
         'YOUTUBE_BRAND_REFRESH_TOKEN is set but client id/secret are missing.'
@@ -51,6 +90,7 @@ function getBrandAccessToken_() {
 
     var resp = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
       method: 'post',
+      contentType: 'application/x-www-form-urlencoded',
       payload: {
         client_id: clientId,
         client_secret: clientSecret,
