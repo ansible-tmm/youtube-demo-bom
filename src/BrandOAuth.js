@@ -60,20 +60,28 @@ function hasBrandYouTubeAuth_() {
 }
 
 /**
- * Menu: show the exact redirect URI that must be registered on the OAuth client.
- * Avoids I/l typos when copying from error pages.
+ * Menu: show redirect URIs that must be registered on the OAuth client.
+ * Workspace callbacks often use /a/macros/<domain>/d/... as well as /macros/d/...
  */
 function showBrandOAuthRedirectUri() {
   var scriptId = ScriptApp.getScriptId();
-  var uri = getRedirectUri(scriptId);
+  var uriStandard = getRedirectUri(scriptId);
+  var uriWorkspace =
+    'https://script.google.com/a/macros/redhat.com/d/' +
+    scriptId +
+    '/usercallback';
   SpreadsheetApp.getUi().alert(
-    'Copy this EXACT redirect URI into Cloud Console →\n' +
-      'APIs & Services → Credentials → your OAuth client →\n' +
-      'Authorized redirect URIs:\n\n' +
-      uri +
+    'Add BOTH of these under Cloud Console → Credentials →\n' +
+      'your OAuth client → Authorized redirect URIs:\n\n' +
+      '1) ' +
+      uriStandard +
+      '\n\n2) ' +
+      uriWorkspace +
       '\n\nScript ID:\n' +
       scriptId +
-      '\n\nRemove any old/mistyped URIs, Save, then Authorize again.'
+      '\n\nBefore Brand Authorize: in Apps Script editor, select\n' +
+      'authorizeBrandYouTube → Run → Allow (authorizes the script itself).\n' +
+      'Then Authorize Brand YouTube Account from the Sheet.'
   );
 }
 
