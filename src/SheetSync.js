@@ -16,13 +16,16 @@ function ensureSheetStructure() {
   var raw = ensureHeaderSheet_(ss, CONFIG.SHEETS.RAW, CONFIG.RAW_HEADERS);
   var bom = ensureHeaderSheet_(ss, CONFIG.SHEETS.BOM, CONFIG.BOM_HEADERS);
   ensureHeaderSheet_(ss, CONFIG.SHEETS.EXTRA_IDS, CONFIG.EXTRA_ID_HEADERS);
+  ensureStatusViewSheets_(ss);
   migrateLegacyHeaders_(raw, bom);
   applyBomPresentation_(bom);
+  orderUsefulTabs_(ss);
 
   SpreadsheetApp.getUi().alert(
-    'Sheet structure ready.\n\nTabs: _config, _youtube_raw, BOM, _extra_video_ids\n' +
-      'For scheduled videos (Brand Account): paste Studio video IDs/URLs into _extra_video_ids.\n' +
-      'Video ID column is hidden on BOM (unhide anytime via column menu).'
+    'Sheet structure ready.\n\n' +
+      'Human: BOM\n' +
+      'Machine views (newest first): Scheduled, Unlisted, Private, _youtube_raw\n' +
+      'Video ID is hidden on BOM (unhide via column menu).'
   );
 }
 
@@ -127,14 +130,17 @@ function syncYouTube() {
   var raw = ensureHeaderSheet_(ss, CONFIG.SHEETS.RAW, CONFIG.RAW_HEADERS);
   var bom = ensureHeaderSheet_(ss, CONFIG.SHEETS.BOM, CONFIG.BOM_HEADERS);
   ensureHeaderSheet_(ss, CONFIG.SHEETS.EXTRA_IDS, CONFIG.EXTRA_ID_HEADERS);
+  ensureStatusViewSheets_(ss);
   migrateLegacyHeaders_(raw, bom);
 
   var pulled = pullChannelVideos_();
   var rows = pulled.rows;
 
   replaceRawSheet_(raw, rows);
+  var viewCounts = writeStatusViews_(ss, rows);
   var appended = appendNewBomRows_(bom, rows);
   applyBomPresentation_(bom);
+  orderUsefulTabs_(ss);
 
   // Fix duration display on existing BOM formula rows (plain text).
   var bomLast = bom.getLastRow();
@@ -154,6 +160,13 @@ function syncYouTube() {
     'Statuses: ' +
     summarizeStatuses_(rows) +
     '\n' +
+    'Views: Scheduled=' +
+    viewCounts.scheduled +
+    ', Unlisted=' +
+    viewCounts.unlisted +
+    ', Private=' +
+    viewCounts.private +
+    ' (newest first)\n' +
     'Extra IDs requested/resolved: ' +
     (pulled.channel.extraRequested || 0) +
     '/' +
@@ -195,28 +208,95 @@ function syncYouTube() {
 }
 
 /**
- * Full replace of _youtube_raw data (keeps header).
+ * Ensure Scheduled / Unlisted / Private tabs exist with raw headers.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ */
+function ensureStatusViewSheets_(ss) {
+  for (var i = 0; i < CONFIG.STATUS_VIEWS.length; i++) {
+    ensureHeaderSheet_(ss, CONFIG.STATUS_VIEWS[i].sheet, CONFIG.RAW_HEADERS);
+  }
+}
+
+/**
+ * Put human + status views in a predictable tab order (status tabs near the end).
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ */
+function orderUsefulTabs_(ss) {
+  var order = [
+    CONFIG.SHEETS.BOM,
+    CONFIG.SHEETS.SCHEDULED,
+    CONFIG.SHEETS.UNLISTED,
+    CONFIG.SHEETS.PRIVATE,
+    CONFIG.SHEETS.RAW,
+    CONFIG.SHEETS.CONFIG,
+    CONFIG.SHEETS.EXTRA_IDS
+  ];
+  for (var i = 0; i < order.length; i++) {
+    var sh = ss.getSheetByName(order[i]);
+    if (sh) {
+      ss.setActiveSheet(sh);
+      ss.moveActiveSheet(i + 1);
+    }
+  }
+}
+
+/**
+ * Full-replace status view tabs (machine-owned). Rows already newest-first.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {Array[]} rows
+ * @return {{scheduled: number, unlisted: number, private: number}}
+ */
+function writeStatusViews_(ss, rows) {
+  var counts = { scheduled: 0, unlisted: 0, private: 0 };
+  for (var i = 0; i < CONFIG.STATUS_VIEWS.length; i++) {
+    var view = CONFIG.STATUS_VIEWS[i];
+    var sheet = ensureHeaderSheet_(ss, view.sheet, CONFIG.RAW_HEADERS);
+    var filtered = [];
+    for (var r = 0; r < rows.length; r++) {
+      if (String(rows[r][3] || '').toLowerCase() === view.status) {
+        filtered.push(rows[r]);
+      }
+    }
+    counts[view.status] = filtered.length;
+    replaceMachineSheet_(sheet, filtered);
+  }
+  return counts;
+}
+
+/**
+ * Full replace of _youtube_raw data (keeps header). Newest first.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} raw
  * @param {Array[]} rows
  */
 function replaceRawSheet_(raw, rows) {
-  var lastRow = raw.getLastRow();
+  replaceMachineSheet_(raw, rows);
+}
+
+/**
+ * Clear data rows and write values; format date + duration columns.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Array[]} rows
+ */
+function replaceMachineSheet_(sheet, rows) {
+  var width = CONFIG.RAW_HEADERS.length;
+  var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
-    raw.getRange(2, 1, lastRow - 1, CONFIG.RAW_HEADERS.length).clearContent();
+    sheet.getRange(2, 1, lastRow - 1, width).clearContent();
   }
+
+  // Always rewrite header (keeps contract obvious on status tabs).
+  sheet.getRange(1, 1, 1, width).setValues([CONFIG.RAW_HEADERS]);
+  sheet.getRange(1, 1, 1, width).setFontWeight('bold');
+  sheet.setFrozenRows(1);
 
   if (!rows.length) {
     return;
   }
 
-  var range = raw.getRange(2, 1, rows.length, CONFIG.RAW_HEADERS.length);
-  // Duration column (I = 9) as plain text before write.
-  raw.getRange(2, 9, rows.length, 1).setNumberFormat('@');
-  range.setValues(rows);
-
-  // Published (E=5), Feed synced (K=11)
-  raw.getRange(2, 5, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
-  raw.getRange(2, 11, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  sheet.getRange(2, 9, rows.length, 1).setNumberFormat('@');
+  sheet.getRange(2, 1, rows.length, width).setValues(rows);
+  sheet.getRange(2, 5, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  sheet.getRange(2, 11, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
 }
 
 /**

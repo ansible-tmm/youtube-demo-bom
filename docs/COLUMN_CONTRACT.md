@@ -6,8 +6,11 @@ This project uses **Pattern A**:
 
 | Tab | Owner | Sync behavior |
 |-----|--------|----------------|
-| `_youtube_raw` | Machine | **Full replace** every sync |
-| `BOM` | Humans + append-only automation | Sync **appends** new video IDs only; never clears human cells |
+| `_youtube_raw` | Machine | **Full replace** every sync (newest date first) |
+| `Scheduled` | Machine | **Full replace** — scheduled only, newest first |
+| `Unlisted` | Machine | **Full replace** — unlisted only, newest first |
+| `Private` | Machine | **Full replace** — private only, newest first |
+| `BOM` | Humans + append-only automation | Sync **appends** new video IDs only; never clears human cells; not auto-sorted |
 | `_config` | Humans | Channel handle / ID settings |
 | `DemoMap` (optional) | Humans / offline script | Lookup table for demo slug suggestions |
 

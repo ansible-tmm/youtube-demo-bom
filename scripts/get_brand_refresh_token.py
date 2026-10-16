@@ -39,17 +39,26 @@ TOKEN_PATH = Path(__file__).resolve().parent / "token.json"
 
 def main() -> int:
     try:
-        from google.auth.transport.requests import Request
-        from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
         from googleapiclient.discovery import build
     except ImportError:
-        print("pip install -r scripts/requirements-sync.txt", file=sys.stderr)
+        print(
+            "ERROR: Google API packages not installed.\n"
+            "Run this first:\n"
+            "  pip3 install -r scripts/requirements-sync.txt\n",
+            file=sys.stderr,
+        )
         return 1
 
     if not CLIENT_SECRET.is_file():
-        print(f"Missing {CLIENT_SECRET}", file=sys.stderr)
-        print("Create a Desktop OAuth client and download JSON there.", file=sys.stderr)
+        print(
+            f"ERROR: Missing OAuth client file:\n  {CLIENT_SECRET}\n\n"
+            "In Google Cloud Console (project ansible-youtube-bom):\n"
+            "  APIs & Services → Credentials → Create credentials\n"
+            "  → OAuth client ID → Application type: Desktop app → Create\n"
+            "  → Download JSON → save it as scripts/client_secret.json\n",
+            file=sys.stderr,
+        )
         return 1
 
     # Always re-consent so you can pick the brand and get a refresh token.

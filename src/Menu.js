@@ -18,23 +18,33 @@ function onOpen() {
     .addItem('Add scheduled video IDs…', 'promptAddExtraVideoIds')
     .addItem('Suggest demo slugs (from DemoMap)', 'suggestDemoSlugs')
     .addSeparator()
-    .addItem('Install hourly sync trigger', 'installHourlyTrigger')
+    .addItem('Install daily sync trigger (7am)', 'installDailyTrigger')
     .addItem('Remove sync triggers', 'removeSyncTriggers')
     .addToUi();
 }
 
 /**
- * Create a time-driven trigger that calls syncYouTube every hour.
- * Prefer YOUTUBE_BRAND_REFRESH_TOKEN so scheduled videos keep syncing.
+ * Time-driven trigger: sync once per day around 7:00 (script timezone).
+ * Prefer YOUTUBE_BRAND_REFRESH_TOKEN so scheduled/private stay visible.
  */
-function installHourlyTrigger() {
+function installDailyTrigger() {
   removeSyncTriggers();
-  ScriptApp.newTrigger('syncYouTube').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('syncYouTube')
+    .timeBased()
+    .everyDays(1)
+    .atHour(7)
+    .create();
   SpreadsheetApp.getUi().alert(
-    'Hourly trigger installed.\n\n' +
-      'Prefer YOUTUBE_BRAND_REFRESH_TOKEN so scheduled videos keep syncing.\n' +
+    'Daily sync trigger installed (~7:00 in the script timezone).\n\n' +
+      'Timezone: check appsscript.json (America/New_York).\n' +
+      'Uses Brand refresh token when configured.\n' +
       'Use "Remove sync triggers" to disable.'
   );
+}
+
+/** @deprecated Use installDailyTrigger */
+function installHourlyTrigger() {
+  installDailyTrigger();
 }
 
 /**

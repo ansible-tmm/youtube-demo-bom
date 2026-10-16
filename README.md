@@ -116,8 +116,10 @@ What happens:
 | Method | How |
 |--------|-----|
 | Manual | **YouTube BOM → Sync YouTube** |
-| Hourly trigger | **YouTube BOM → Install hourly sync trigger** |
+| Daily trigger | **YouTube BOM → Install daily sync trigger (7am)** |
 | Remove trigger | **YouTube BOM → Remove sync triggers** |
+
+After sync, use tabs **Scheduled**, **Unlisted**, and **Private** for quick status views (machine-owned, newest first). Do human edits on **BOM**.
 
 Triggers run as the user who installed them. Re-authorize if YouTube OAuth expires.
 

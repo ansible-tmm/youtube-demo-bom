@@ -3,6 +3,7 @@
  *
  * Pattern A (preferred):
  *   _youtube_raw  — machine-owned; full replace every sync
+ *   Scheduled / Unlisted / Private — machine-owned status views (newest first)
  *   BOM           — human sheet; sync only appends new Video ID rows
  *   Auto stats on BOM come from XLOOKUP formulas into _youtube_raw
  */
@@ -12,9 +13,19 @@ var CONFIG = {
     CONFIG: '_config',
     RAW: '_youtube_raw',
     BOM: 'BOM',
+    SCHEDULED: 'Scheduled',
+    UNLISTED: 'Unlisted',
+    PRIVATE: 'Private',
     /** Paste scheduled/private video IDs or Studio URLs here (Brand Account workaround). */
     EXTRA_IDS: '_extra_video_ids'
   },
+
+  /** Machine status views: full replace each sync, sorted newest date first. */
+  STATUS_VIEWS: [
+    { sheet: 'Scheduled', status: 'scheduled' },
+    { sheet: 'Unlisted', status: 'unlisted' },
+    { sheet: 'Private', status: 'private' }
+  ],
 
   EXTRA_ID_HEADERS: ['video_id_or_url', 'notes'],
 
