@@ -9,10 +9,7 @@
  * @return {Object} parsed JSON
  */
 function youtubeHttpGet_(resource, params) {
-  var service = getBrandYouTubeService_();
-  if (!service.hasAccess()) {
-    throw new Error('Brand YouTube OAuth is not authorized.');
-  }
+  var accessToken = getBrandAccessToken_();
 
   var qs = [];
   var keys = Object.keys(params);
@@ -30,7 +27,7 @@ function youtubeHttpGet_(resource, params) {
   var resp = UrlFetchApp.fetch(url, {
     method: 'get',
     headers: {
-      Authorization: 'Bearer ' + service.getAccessToken()
+      Authorization: 'Bearer ' + accessToken
     },
     muteHttpExceptions: true
   });
@@ -70,7 +67,7 @@ function resolveChannelBrandHttp_(cfg) {
       wantHandle &&
       (customUrl === wantHandle || title.indexOf(wantHandle) !== -1);
     if (idMatch || handleMatch || (!wantId && !wantHandle && mineItems.length === 1)) {
-      return channelResult_(ch, 'brand-oauth (mine)');
+      return channelResult_(ch, 'brand-refresh-token (mine)');
     }
   }
 
@@ -90,7 +87,7 @@ function resolveChannelBrandHttp_(cfg) {
   }
   return channelResult_(
     pub.items[0],
-    'brand-oauth (by id/handle; if scheduled missing, re-auth and pick Playbook)'
+    'brand-refresh-token (by id/handle; re-run get_brand_refresh_token.py if scheduled missing)'
   );
 }
 

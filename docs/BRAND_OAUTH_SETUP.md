@@ -1,66 +1,62 @@
-# Brand Account OAuth (Method 3)
+# Brand Account auth (scheduled videos)
 
-Goal: Sync **scheduled/private** videos for The Ansible Playbook Brand Account from the Sheet menu.
+## Why the Sheet “Authorize Brand” flow fails
 
-## Step A — Standard Cloud project
+When you pick a **Brand Account** in Google’s chooser, the redirect hits Apps
+Script `/usercallback` and shows:
 
-1. Open your Apps Script project (from the Sheet: **Extensions → Apps Script**).
-2. **Project Settings** (gear) → under **Google Cloud Platform (GCP) Project** click **Change project**.
-3. Create a new Cloud project (or paste an existing project number).
-4. In [Google Cloud Console](https://console.cloud.google.com/) for that project:
-   - **APIs & Services → Library** → enable **YouTube Data API v3**.
+> Authorization is required to perform that action.
 
-## Step B — OAuth consent screen
+Brand identities cannot run Apps Script callbacks. That path is a dead end for
+Playbook scheduled videos.
 
-1. **APIs & Services → OAuth consent screen**.
-2. User type: **Internal** (if redhat.com Workspace) or **External**.
-3. App name e.g. `YouTube Demo BOM`.
-4. Add scopes: `.../auth/youtube.readonly` (and whatever the wizard requires).
-5. Save.
+## Working approach (refresh token)
 
-## Step C — OAuth client (Web application)
+Do Brand login **once in Python**, paste the refresh token into Apps Script,
+then **Sync YouTube** in the Sheet as usual.
 
-1. **APIs & Services → Credentials → Create credentials → OAuth client ID**.
-2. Application type: **Web application**.
-3. Name e.g. `YouTube BOM Apps Script`.
-4. **Authorized redirect URIs** — add exactly:
+### 1. Desktop OAuth client
 
-   ```
-   https://script.google.com/macros/d/SCRIPT_ID/usercallback
-   ```
+In Cloud project **ansible-youtube-bom**:
 
-   Replace `SCRIPT_ID` with your Apps Script ID from **Project Settings → Script ID**  
-   (looks like `1aBzs6xtYOZ84P3u4ORtl8cDtUG1qJsdQalDLxLDzWoO0UC96VcjP-zda`).
+1. OAuth consent screen = **External** + **Testing**
+2. Test users: your `scavanau@redhat.com`
+3. **Credentials → Create credentials → OAuth client ID → Desktop app**
+4. Download JSON → save as `scripts/client_secret.json` (gitignored)
 
-5. Create → copy **Client ID** and **Client secret**.
+### 2. Get the refresh token
 
-## Step D — Script properties
+```bash
+cd /path/to/youtube-demo-bom
+pip install -r scripts/requirements-sync.txt
+python3 scripts/get_brand_refresh_token.py
+```
 
-In Apps Script → **Project Settings → Script properties** → add:
+In the browser, pick the Brand Account that owns **The Ansible Playbook**.
+The script prints channels for `mine=true` — you want
+`UCPJo5UY1KsP7J1BuHmiWNzQ`. If missing, re-run and pick a different brand.
+
+### 3. Script properties
+
+Apps Script → **Project Settings → Script properties**:
 
 | Property | Value |
 |----------|--------|
-| `YOUTUBE_OAUTH_CLIENT_ID` | *(client id)* |
-| `YOUTUBE_OAUTH_CLIENT_SECRET` | *(client secret)* |
+| `YOUTUBE_OAUTH_CLIENT_ID` | Desktop client ID |
+| `YOUTUBE_OAUTH_CLIENT_SECRET` | Desktop client secret |
+| `YOUTUBE_BRAND_REFRESH_TOKEN` | Printed refresh token |
 
-## Step E — Code (OAuth2 is vendored — no Libraries UI)
+(Replace earlier Web-client values with the **Desktop** client id/secret.)
 
-Paste/update these from the repo (do **not** add the external OAuth2 library;
-Red Hat orgs often block Library lookup):
+### 4. Paste code + Sync
 
-- `BrandOAuth.js`, `YouTubeHttp.js`, `Menu.js`, `YouTube.js`, `SheetSync.js`
-- `OAuth2.js`, `OAuth2Service.js`, `OAuth2Storage.js`, `OAuth2Utilities.js`
-  (Apache-2.0, from [apps-script-oauth2](https://github.com/googleworkspace/apps-script-oauth2))
-- `appsscript.json` (no `libraries` block)
+Ensure `BrandToken.js` is in the Apps Script project (from this repo).
 
-## Step F — Authorize brand + sync
+Sheet → **List Brand OAuth channels** → should list Playbook.  
+Then **Sync YouTube** → expect `Auth path: brand-refresh-token` and `scheduled=…`.
 
-1. Hard-refresh the Sheet.
-2. **YouTube BOM → Authorize Brand YouTube Account** → open the link.
-3. Sign in as redhat.com → **pick The Ansible Playbook** if shown → Allow.
-4. **YouTube BOM → List Brand OAuth channels** — Playbook should appear.
-5. **YouTube BOM → Sync YouTube** — expect `Auth path: brand-oauth` and `scheduled=…`.
+### Rotate / redo
 
-## Reset
-
-**YouTube BOM → Reset Brand YouTube auth**, then authorize again (e.g. if you picked the wrong account).
+Revoke the app under [Google Account permissions](https://myaccount.google.com/permissions),
+delete `scripts/token.json`, re-run `get_brand_refresh_token.py`, update the
+Script property.

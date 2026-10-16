@@ -50,15 +50,6 @@ function getBrandYouTubeService_() {
     .setParam('prompt', 'select_account consent');
 }
 
-/** True when a brand (or user) YouTube token is stored and usable. */
-function hasBrandYouTubeAuth_() {
-  try {
-    return getBrandYouTubeService_().hasAccess();
-  } catch (e) {
-    return false;
-  }
-}
-
 /**
  * Menu: show redirect URIs that must be registered on the OAuth client.
  * Workspace callbacks often use /a/macros/<domain>/d/... as well as /macros/d/...
@@ -183,20 +174,6 @@ function resetBrandYouTubeAuth() {
   SpreadsheetApp.getUi().alert(
     'Brand YouTube auth cleared.\n\nRun Authorize Brand YouTube Account again.'
   );
-}
-
-/**
- * Menu: show channels visible to the brand OAuth token (mine=true).
- */
-function listBrandYouTubeChannels() {
-  if (!hasBrandYouTubeAuth_()) {
-    SpreadsheetApp.getUi().alert(
-      'Brand YouTube is not authorized yet.\n\n' +
-        'Run YouTube BOM → Authorize Brand YouTube Account first.'
-    );
-    return;
-  }
-  SpreadsheetApp.getUi().alert(summarizeBrandTokenChannels_());
 }
 
 /**
