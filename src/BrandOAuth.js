@@ -60,6 +60,24 @@ function hasBrandYouTubeAuth_() {
 }
 
 /**
+ * Menu: show the exact redirect URI that must be registered on the OAuth client.
+ * Avoids I/l typos when copying from error pages.
+ */
+function showBrandOAuthRedirectUri() {
+  var scriptId = ScriptApp.getScriptId();
+  var uri = getRedirectUri(scriptId);
+  SpreadsheetApp.getUi().alert(
+    'Copy this EXACT redirect URI into Cloud Console →\n' +
+      'APIs & Services → Credentials → your OAuth client →\n' +
+      'Authorized redirect URIs:\n\n' +
+      uri +
+      '\n\nScript ID:\n' +
+      scriptId +
+      '\n\nRemove any old/mistyped URIs, Save, then Authorize again.'
+  );
+}
+
+/**
  * Menu: open browser auth so you can pick The Ansible Playbook brand.
  */
 function authorizeBrandYouTube() {

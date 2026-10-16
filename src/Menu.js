@@ -9,6 +9,7 @@ function onOpen() {
     .addItem('Ensure sheet structure', 'ensureSheetStructure')
     .addSeparator()
     .addItem('Authorize Brand YouTube Account', 'authorizeBrandYouTube')
+    .addItem('Show Brand OAuth redirect URI', 'showBrandOAuthRedirectUri')
     .addItem('List Brand OAuth channels', 'listBrandYouTubeChannels')
     .addItem('Reset Brand YouTube auth', 'resetBrandYouTubeAuth')
     .addSeparator()
