@@ -5,10 +5,10 @@
   "description": "Sync YouTube channel metadata into a Google Sheet content BOM",
   "scripts": {
     "clasp:login": "clasp login",
-    "clasp:clone": "echo 'Copy .clasp.json.example to .clasp.json and set scriptId, then: npx clasp clone <scriptId> --rootDir src'",
     "push": "clasp push",
     "pull": "clasp pull",
-    "open": "clasp open"
+    "open": "clasp open",
+    "status": "clasp status"
   },
   "devDependencies": {
     "@google/clasp": "^2.4.2"

@@ -43,18 +43,16 @@ Rows with a **blank Video ID** are checklist items — sync leaves them alone fo
 
 ```bash
 npm install
-cp .clasp.json.example .clasp.json
-npx clasp login
-npx clasp create --type sheets --title "YouTube Demo BOM" --rootDir src
-# clasp writes scriptId into .clasp.json (gitignored)
-npx clasp push
-npx clasp open
+cp .clasp.json.example .clasp.json   # set scriptId from Apps Script → Project Settings
+npx clasp login                       # once; enable Apps Script API at script.google.com/home/usersettings
+npm run push                          # uploads src/ → the bound Apps Script project
 ```
 
-Then in the Apps Script editor: **Services** → add **YouTube Data API v3** (symbol `YouTube`).  
-`appsscript.json` already declares it; confirm it appears under Services after push.
+Day-to-day: edit files under `src/` in Cursor → `npm run push` → hard-refresh the Sheet.  
+`npm run pull` downloads from Apps Script if you changed something in the web editor.  
+`npm run open` opens the script in the browser.
 
-Attach the script to your Sheet if `clasp create` did not: Sheet → **Extensions → Apps Script**, or create the script from the Sheet and put the script ID into `.clasp.json`.
+Confirm **Services** still lists **YouTube Data API v3** after the first push.
 
 **Option B — paste manually**
 

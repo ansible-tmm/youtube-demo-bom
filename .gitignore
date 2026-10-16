@@ -31,3 +31,4 @@ venv/
 *.pyc
 client_id
 client_secret
+.venv/
