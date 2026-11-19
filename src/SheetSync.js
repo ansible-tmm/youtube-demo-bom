@@ -148,12 +148,7 @@ function syncYouTube() {
   applyBomPresentation_(bom);
   orderUsefulTabs_(ss);
 
-  // Fix duration display on existing BOM formula rows (plain text).
-  var bomLast = bom.getLastRow();
-  if (bomLast >= 2) {
-    bom.getRange(2, 9, bomLast - 1, 1).setNumberFormat('@');
-    bom.getRange(2, 12, bomLast - 1, 1).setNumberFormat('yyyy-mm-dd hh:mm');
-  }
+  applyBomNumberFormats_(bom);
 
   var msg =
     'Synced ' +
@@ -322,7 +317,9 @@ function replaceMachineSheet_(sheet, rows) {
     return;
   }
 
-  sheet.getRange(2, 9, rows.length, 1).setNumberFormat('@');
+  sheet.getRange(2, 9, rows.length, 1).setNumberFormat('@'); // Duration
+  sheet.getRange(2, 10, rows.length, 1).setNumberFormat('@'); // Format
+  sheet.getRange(2, 12, rows.length, 1).setNumberFormat('0'); // Subscribers gained
   sheet.getRange(2, 1, rows.length, width).setValues(rows);
   sheet.getRange(2, 5, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
   // Feed synced at = last RAW_HEADERS column
@@ -378,12 +375,31 @@ function appendNewBomRows_(bom, rawRows) {
   }
 
   bom.getRange(startRow, 1, toAppend.length, width).setValues(values);
-  bom.getRange(startRow, 5, toAppend.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
-  bom.getRange(startRow, 9, toAppend.length, 1).setNumberFormat('@');
-  bom.getRange(startRow, 12, toAppend.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  applyBomNumberFormats_(bom, startRow, toAppend.length);
 
   applyBomDataValidation_(bom);
   return toAppend.length;
+}
+
+/**
+ * Duration/Format as text; Subscribers gained as integer; Feed synced as datetime.
+ * Inserted columns often inherit a date format, which turns "4" into 1900-01-04.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
+ * @param {number=} startRow
+ * @param {number=} numRows
+ */
+function applyBomNumberFormats_(bom, startRow, numRows) {
+  if (!bom) return;
+  var start = startRow || 2;
+  var lastRow = bom.getLastRow();
+  if (lastRow < start) return;
+  var n = numRows || lastRow - start + 1;
+  if (n < 1) return;
+  bom.getRange(start, 5, n, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  bom.getRange(start, 9, n, 1).setNumberFormat('@'); // Duration
+  bom.getRange(start, 10, n, 1).setNumberFormat('@'); // Format
+  bom.getRange(start, 11, n, 1).setNumberFormat('0'); // Subscribers gained
+  bom.getRange(start, 12, n, 1).setNumberFormat('yyyy-mm-dd hh:mm');
 }
 
 /**
@@ -416,6 +432,7 @@ function migrateBomSchema_(bom) {
   bom.getRange(1, 1, 1, CONFIG.BOM_HEADERS.length).setValues([CONFIG.BOM_HEADERS]);
   bom.getRange(1, 1, 1, CONFIG.BOM_HEADERS.length).setFontWeight('bold');
   bom.setFrozenRows(1);
+  applyBomNumberFormats_(bom);
   return changed;
 }
 
@@ -605,9 +622,7 @@ function repairBomAutoFormulas_(bom, force) {
         out.push(auto[c]);
       }
       bom.getRange(rowNum, 2, 1, CONFIG.BOM_AUTO_FORMULA_COUNT).setValues([out]);
-      bom.getRange(rowNum, 5).setNumberFormat('yyyy-mm-dd hh:mm');
-      bom.getRange(rowNum, 9).setNumberFormat('@');
-      bom.getRange(rowNum, 12).setNumberFormat('yyyy-mm-dd hh:mm');
+      applyBomNumberFormats_(bom, rowNum, 1);
       repaired++;
     }
 
