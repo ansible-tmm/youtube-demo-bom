@@ -18,12 +18,13 @@ function ensureSheetStructure() {
   ensureHeaderSheet_(ss, CONFIG.SHEETS.EXTRA_IDS, CONFIG.EXTRA_ID_HEADERS);
   ensureStatusViewSheets_(ss);
   migrateLegacyHeaders_(raw, bom);
+  migrateBomSchema_(bom);
   applyBomPresentation_(bom);
   orderUsefulTabs_(ss);
 
   SpreadsheetApp.getUi().alert(
     'Sheet structure ready.\n\n' +
-      'Human: BOM\n' +
+      'Human: BOM (published videos only)\n' +
       'Machine views (newest first): Scheduled, Unlisted, Private, _youtube_raw\n' +
       'Video ID is hidden on BOM (unhide via column menu).'
   );
@@ -132,6 +133,7 @@ function syncYouTube() {
   ensureHeaderSheet_(ss, CONFIG.SHEETS.EXTRA_IDS, CONFIG.EXTRA_ID_HEADERS);
   ensureStatusViewSheets_(ss);
   migrateLegacyHeaders_(raw, bom);
+  var schemaChanged = migrateBomSchema_(bom);
 
   var pulled = pullChannelVideos_();
   var rows = pulled.rows;
@@ -139,8 +141,9 @@ function syncYouTube() {
   replaceRawSheet_(raw, rows);
   var viewCounts = writeStatusViews_(ss, rows);
   var appended = appendNewBomRows_(bom, rows);
+  var pruned = pruneNonPublishedBomRows_(bom, rows);
   sortBomNewestFirst_(bom);
-  var repairResult = repairBomAutoFormulas_(bom);
+  var repairResult = repairBomAutoFormulas_(bom, schemaChanged);
   var repaired = repairResult.repaired;
   applyBomPresentation_(bom);
   orderUsefulTabs_(ss);
@@ -149,6 +152,7 @@ function syncYouTube() {
   var bomLast = bom.getLastRow();
   if (bomLast >= 2) {
     bom.getRange(2, 9, bomLast - 1, 1).setNumberFormat('@');
+    bom.getRange(2, 12, bomLast - 1, 1).setNumberFormat('yyyy-mm-dd hh:mm');
   }
 
   var msg =
@@ -170,6 +174,9 @@ function syncYouTube() {
     ', Private=' +
     viewCounts.private +
     ' (newest first)\n' +
+    'Subscribers gained filled: ' +
+    (pulled.channel.subscribersGainedFilled || 0) +
+    '\n' +
     'Extra IDs requested/resolved: ' +
     (pulled.channel.extraRequested || 0) +
     '/' +
@@ -182,12 +189,22 @@ function syncYouTube() {
     '\n' +
     'Appended ' +
     appended +
-    ' new BOM row(s).\n' +
+    ' published BOM row(s).\n' +
+    'Pruned ' +
+    pruned +
+    ' non-published BOM row(s) with empty human columns.\n' +
     'BOM sorted newest-first by publish/schedule date.\n' +
     'Repaired auto formulas on ' +
     repaired +
     ' BOM row(s).\n' +
     'Human columns stayed with their Video ID rows.';
+
+  if (!(pulled.channel.subscribersGainedFilled > 0) && hasBrandYouTubeAuth_()) {
+    msg +=
+      '\n\nSubscribers gained is empty: enable YouTube Analytics API, add' +
+      '\nyt-analytics.readonly on the OAuth consent screen, then re-run' +
+      '\nscripts/get_brand_refresh_token.py and update YOUTUBE_BRAND_REFRESH_TOKEN.';
+  }
 
   if (String(pulled.channel.authPath).indexOf('brand-oauth') === 0) {
     // ok
@@ -308,11 +325,15 @@ function replaceMachineSheet_(sheet, rows) {
   sheet.getRange(2, 9, rows.length, 1).setNumberFormat('@');
   sheet.getRange(2, 1, rows.length, width).setValues(rows);
   sheet.getRange(2, 5, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
-  sheet.getRange(2, 11, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  // Feed synced at = last RAW_HEADERS column
+  sheet
+    .getRange(2, CONFIG.RAW_HEADERS.length, rows.length, 1)
+    .setNumberFormat('yyyy-mm-dd hh:mm');
 }
 
 /**
- * Append new BOM rows at the bottom (auto formula columns only).
+ * Append new **published** BOM rows at the bottom (auto formula columns only).
+ * Unlisted / private / scheduled stay on their status tabs, not BOM.
  * Sync then calls sortBomNewestFirst_ so the sheet reads newest-first.
  * Human columns stay blank on new rows.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
@@ -325,7 +346,11 @@ function appendNewBomRows_(bom, rawRows) {
 
   for (var i = 0; i < rawRows.length; i++) {
     var videoId = String(rawRows[i][0] || '').trim();
+    var status = String(rawRows[i][3] || '').trim().toLowerCase();
     if (!videoId || existing[videoId]) {
+      continue;
+    }
+    if (status !== 'published') {
       continue;
     }
     existing[videoId] = true;
@@ -355,10 +380,92 @@ function appendNewBomRows_(bom, rawRows) {
   bom.getRange(startRow, 1, toAppend.length, width).setValues(values);
   bom.getRange(startRow, 5, toAppend.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
   bom.getRange(startRow, 9, toAppend.length, 1).setNumberFormat('@');
-  bom.getRange(startRow, 10, toAppend.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  bom.getRange(startRow, 12, toAppend.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
 
   applyBomDataValidation_(bom);
   return toAppend.length;
+}
+
+/**
+ * Insert Format + Subscribers gained columns before Feed synced at when missing.
+ * Rewrites the BOM header row to CONFIG.BOM_HEADERS.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
+ * @return {boolean} true if columns were inserted (callers should force-repair formulas)
+ */
+function migrateBomSchema_(bom) {
+  if (!bom) return false;
+  var lastCol = Math.max(bom.getLastColumn(), 1);
+  var headers = bom.getRange(1, 1, 1, lastCol).getValues()[0];
+  var names = [];
+  for (var i = 0; i < headers.length; i++) {
+    names.push(String(headers[i] || '').trim());
+  }
+
+  var changed = false;
+  if (names.indexOf('Format') === -1) {
+    var feedIdx = names.indexOf('Feed synced at');
+    var insertAt = feedIdx >= 0 ? feedIdx + 1 : 10;
+    bom.insertColumnsBefore(insertAt, 2);
+    changed = true;
+  } else if (names.indexOf('Subscribers gained') === -1) {
+    var formatIdx = names.indexOf('Format');
+    bom.insertColumnsAfter(formatIdx + 1, 1);
+    changed = true;
+  }
+
+  bom.getRange(1, 1, 1, CONFIG.BOM_HEADERS.length).setValues([CONFIG.BOM_HEADERS]);
+  bom.getRange(1, 1, 1, CONFIG.BOM_HEADERS.length).setFontWeight('bold');
+  bom.setFrozenRows(1);
+  return changed;
+}
+
+/**
+ * Remove BOM rows for non-published videos when human columns are empty.
+ * Keeps rows that have demo notes / owners / etc.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
+ * @param {Array[]} rawRows
+ * @return {number}
+ */
+function pruneNonPublishedBomRows_(bom, rawRows) {
+  if (!bom) return 0;
+  var statusById = {};
+  for (var i = 0; i < rawRows.length; i++) {
+    var id = String(rawRows[i][0] || '').trim();
+    if (id) {
+      statusById[id] = String(rawRows[i][3] || '').trim().toLowerCase();
+    }
+  }
+
+  var lastRow = bom.getLastRow();
+  if (lastRow < 2) return 0;
+
+  var width = Math.max(bom.getLastColumn(), CONFIG.BOM_HEADERS.length);
+  var humanStart = CONFIG.BOM_HUMAN_START_COL; // 0-based
+  var removed = 0;
+
+  // Bottom-up so deleteRow does not shift unvisited indexes.
+  for (var row = lastRow; row >= 2; row--) {
+    var videoId = String(bom.getRange(row, 1).getValue() || '').trim();
+    if (!videoId) continue;
+    var status = statusById[videoId];
+    if (!status || status === 'published') continue;
+
+    var humanVals = bom
+      .getRange(row, humanStart + 1, 1, width - humanStart)
+      .getDisplayValues()[0];
+    var hasHuman = false;
+    for (var c = 0; c < humanVals.length; c++) {
+      if (String(humanVals[c] || '').trim()) {
+        hasHuman = true;
+        break;
+      }
+    }
+    if (hasHuman) continue;
+
+    bom.deleteRow(row);
+    removed++;
+  }
+  return removed;
 }
 
 /**
@@ -368,8 +475,9 @@ function sortBomNewestFirst() {
   var bom = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(
     CONFIG.SHEETS.BOM
   );
+  migrateBomSchema_(bom);
   sortBomNewestFirst_(bom);
-  repairBomAutoFormulas_(bom);
+  repairBomAutoFormulas_(bom, true);
   try {
     SpreadsheetApp.getUi().alert(
       'BOM sorted newest-first by “Published or scheduled at”.\n' +
@@ -399,20 +507,15 @@ function sortBomNewestFirst_(bom) {
 }
 
 /**
- * Fill auto formula columns (B–J) on a BOM row array. Leaves human cols alone.
+ * Fill auto formula columns on a BOM row array. Leaves human cols alone.
  * @param {Array} row
  * @param {number} rowNum
  */
 function writeBomAutoFormulasIntoRow_(row, rowNum) {
-  row[1] = bomLookupFormula_(rowNum, 2);
-  row[2] = bomLookupFormula_(rowNum, 3);
-  row[3] = bomLookupFormula_(rowNum, 4);
-  row[4] = bomLookupFormula_(rowNum, 5);
-  row[5] = bomLookupFormula_(rowNum, 6);
-  row[6] = bomLookupFormula_(rowNum, 7);
-  row[7] = bomLookupFormula_(rowNum, 8);
-  row[8] = bomLookupFormula_(rowNum, 9);
-  row[9] = bomLookupFormula_(rowNum, 11);
+  var cols = CONFIG.BOM_RAW_LOOKUP_COLS;
+  for (var i = 0; i < cols.length; i++) {
+    row[i + 1] = bomLookupFormula_(rowNum, cols[i]);
+  }
 }
 
 /**
@@ -426,7 +529,8 @@ function repairBomAutoFormulas(bomOpt) {
   var bom =
     bomOpt ||
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEETS.BOM);
-  var result = repairBomAutoFormulas_(bom);
+  migrateBomSchema_(bom);
+  var result = repairBomAutoFormulas_(bom, true);
   try {
     var msg =
       'Repaired auto formulas on ' +
@@ -451,12 +555,14 @@ function repairBomAutoFormulas(bomOpt) {
 }
 
 /**
- * Restore B–J formulas when missing, pointed at the wrong row (partial sort
- * with Video ID hidden), or Title still blank. Never touches human cols (K+).
+ * Restore auto formulas when missing, pointed at the wrong row (partial sort
+ * with Video ID hidden), Title blank, or force=true (schema migration).
+ * Never touches human cols.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
+ * @param {boolean=} force
  * @return {{repaired: number, missingFromRaw: string[]}}
  */
-function repairBomAutoFormulas_(bom) {
+function repairBomAutoFormulas_(bom, force) {
   var empty = { repaired: 0, missingFromRaw: [] };
   if (!bom) return empty;
   var lastRow = bom.getLastRow();
@@ -466,6 +572,7 @@ function repairBomAutoFormulas_(bom) {
   var ids = bom.getRange(2, 1, numRows, 1).getValues();
   var titleFormulas = bom.getRange(2, 2, numRows, 1).getFormulas();
   var titleValues = bom.getRange(2, 2, numRows, 1).getDisplayValues();
+  var formatFormulas = bom.getRange(2, 10, numRows, 1).getFormulas();
   var rawIds = collectRawVideoIds_();
   var repaired = 0;
   var missingFromRaw = [];
@@ -477,11 +584,18 @@ function repairBomAutoFormulas_(bom) {
     var rowNum = i + 2;
     var formula = String(titleFormulas[i][0] || '');
     var display = String(titleValues[i][0] || '').trim();
+    var formatFormula = String(formatFormulas[i][0] || '');
     var expectedRef = '$A' + rowNum;
     var hasLookup = formula.toUpperCase().indexOf('XLOOKUP') !== -1;
     var pointsAtThisRow = formula.indexOf(expectedRef) !== -1;
+    var hasFormatLookup = formatFormula.toUpperCase().indexOf('XLOOKUP') !== -1;
     // Partial sorts (esp. with col A hidden) leave XLOOKUP pointed at another row.
-    var needsRepair = !hasLookup || !pointsAtThisRow || !display;
+    var needsRepair =
+      !!force ||
+      !hasLookup ||
+      !pointsAtThisRow ||
+      !display ||
+      !hasFormatLookup;
 
     if (needsRepair) {
       var auto = new Array(CONFIG.BOM_AUTO_FORMULA_COUNT + 1);
@@ -493,7 +607,7 @@ function repairBomAutoFormulas_(bom) {
       bom.getRange(rowNum, 2, 1, CONFIG.BOM_AUTO_FORMULA_COUNT).setValues([out]);
       bom.getRange(rowNum, 5).setNumberFormat('yyyy-mm-dd hh:mm');
       bom.getRange(rowNum, 9).setNumberFormat('@');
-      bom.getRange(rowNum, 10).setNumberFormat('yyyy-mm-dd hh:mm');
+      bom.getRange(rowNum, 12).setNumberFormat('yyyy-mm-dd hh:mm');
       repaired++;
     }
 

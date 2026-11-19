@@ -19,10 +19,11 @@ then **Sync YouTube** in the Sheet as usual.
 
 In Cloud project **ansible-youtube-bom**:
 
-1. OAuth consent screen = **External** + **Testing**
-2. Test users: your `scavanau@redhat.com`
-3. **Credentials → Create credentials → OAuth client ID → Desktop app**
-4. Download JSON → save as `scripts/client_secret.json` (gitignored)
+1. OAuth consent screen = **External** (Production preferred so refresh tokens do not expire every 7 days)
+2. **Data Access**: include `youtube.readonly` and `yt-analytics.readonly` (subscribers gained)
+3. Enable **YouTube Data API v3** and **YouTube Analytics API**
+4. **Credentials → Create credentials → OAuth client ID → Desktop app**
+5. Download JSON → save as `scripts/client_secret.json` (gitignored)
 
 ### 2. Get the refresh token
 

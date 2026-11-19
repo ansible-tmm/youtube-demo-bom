@@ -4,7 +4,7 @@
  * Pattern A (preferred):
  *   _youtube_raw  — machine-owned; full replace every sync
  *   Scheduled / Unlisted / Private — machine-owned status views (newest first)
- *   BOM           — human sheet; sync only appends new Video ID rows
+ *   BOM           — human sheet; sync appends published Video ID rows only
  *   Auto stats on BOM come from XLOOKUP formulas into _youtube_raw
  */
 
@@ -49,14 +49,16 @@ var CONFIG = {
     'Likes',
     'Comments',
     'Duration',
+    'Format',
     'Privacy',
+    'Subscribers gained',
     'Feed synced at'
   ],
 
   /**
-   * BOM columns. Indices 0 = Video ID (append-only key).
-   * Indices 1–9 = auto via formulas (written only when appending a new row).
-   * Indices 10+ = human-owned; never written by sync.
+   * BOM columns. Index 0 = Video ID (append-only key).
+   * Indices 1–11 = auto via formulas (written when appending / repairing).
+   * Indices 12+ = human-owned; never written by sync.
    */
   BOM_HEADERS: [
     'Video ID',
@@ -68,6 +70,8 @@ var CONFIG = {
     'Likes',
     'Comments',
     'Duration',
+    'Format',
+    'Subscribers gained',
     'Feed synced at',
     'Demo slug',
     'Script / runbook URL',
@@ -81,10 +85,16 @@ var CONFIG = {
   ],
 
   /** First human-owned column index on BOM (Demo slug). */
-  BOM_HUMAN_START_COL: 10,
+  BOM_HUMAN_START_COL: 12,
 
   /** Number of auto formula columns after Video ID (Title … Feed synced at). */
-  BOM_AUTO_FORMULA_COUNT: 9,
+  BOM_AUTO_FORMULA_COUNT: 11,
+
+  /**
+   * 1-based raw column indexes for BOM XLOOKUP targets (matches RAW_HEADERS).
+   * Privacy is raw-only (not shown on BOM).
+   */
+  BOM_RAW_LOOKUP_COLS: [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
 
   REVIEW_STATUS_VALUES: ['Not started', 'In review', 'Approved']
 };

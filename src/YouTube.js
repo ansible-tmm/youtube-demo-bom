@@ -266,11 +266,18 @@ function normalizeVideo_(v, syncedAt) {
   var stats = v.statistics || {};
   var durationIso =
     (v.contentDetails && v.contentDetails.duration) || '';
+  var title = (v.snippet && v.snippet.title) || '';
+  var description = (v.snippet && v.snippet.description) || '';
+  var format = videoFormatLabel_(title, description, durationIso);
+  var url =
+    format === 'short'
+      ? 'https://www.youtube.com/shorts/' + v.id
+      : 'https://www.youtube.com/watch?v=' + v.id;
 
   return [
     v.id,
-    (v.snippet && v.snippet.title) || '',
-    'https://www.youtube.com/watch?v=' + v.id,
+    title,
+    url,
     statusLabel,
     when ? new Date(when) : '',
     numOrBlank_(stats.viewCount),
@@ -278,9 +285,45 @@ function normalizeVideo_(v, syncedAt) {
     numOrBlank_(stats.commentCount),
     // Plain-language duration so Sheets does not coerce "5:32" into a time serial.
     iso8601DurationToHuman_(durationIso),
+    format,
     privacy,
+    '', // Subscribers gained — filled by Analytics when brand token has yt-analytics scope
     syncedAt
   ];
+}
+
+/**
+ * short = classic Short (≤60s) or tagged #shorts; else regular.
+ * YouTube Shorts can be up to 3 minutes; without aspect ratio we only
+ * promote 61–180s when #shorts is present.
+ * @param {string} title
+ * @param {string} description
+ * @param {string} durationIso
+ * @return {string} 'short' | 'regular'
+ */
+function videoFormatLabel_(title, description, durationIso) {
+  var text = String(title || '') + '\n' + String(description || '');
+  if (/#shorts\b/i.test(text)) {
+    return 'short';
+  }
+  var seconds = iso8601DurationToSeconds_(durationIso);
+  if (seconds > 0 && seconds <= 60) {
+    return 'short';
+  }
+  return 'regular';
+}
+
+/**
+ * @param {string} iso
+ * @return {number}
+ */
+function iso8601DurationToSeconds_(iso) {
+  if (!iso) return 0;
+  var m = String(iso).match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!m) return 0;
+  return (
+    Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0)
+  );
 }
 
 function numOrBlank_(v) {
@@ -373,6 +416,12 @@ function pullChannelVideos_() {
   var rows = useBrand
     ? fetchVideoDetailsHttp_(merged)
     : fetchVideoDetails_(merged);
+
+  var subsFilled = 0;
+  if (useBrand) {
+    subsFilled = enrichRowsWithSubscribersGained_(channel.channelId, rows);
+  }
+  channel.subscribersGainedFilled = subsFilled;
 
   var resolvedExtra = 0;
   var resolvedBomOrphans = 0;

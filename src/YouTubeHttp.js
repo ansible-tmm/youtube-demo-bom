@@ -141,3 +141,100 @@ function fetchVideoDetailsHttp_(videoIds) {
   }
   return rows;
 }
+
+/**
+ * Fill raw col "Subscribers gained" from YouTube Analytics (lifetime).
+ * Requires Brand refresh token with yt-analytics.readonly. Soft-fails if missing.
+ * @param {string} channelId
+ * @param {Array[]} rows
+ * @return {number} how many rows received a value
+ */
+function enrichRowsWithSubscribersGained_(channelId, rows) {
+  if (!channelId || !rows || !rows.length) {
+    return 0;
+  }
+  var ids = [];
+  for (var i = 0; i < rows.length; i++) {
+    var id = String(rows[i][0] || '').trim();
+    if (id) ids.push(id);
+  }
+  var map = fetchSubscribersGainedMap_(channelId, ids);
+  var filled = 0;
+  for (var r = 0; r < rows.length; r++) {
+    var vid = String(rows[r][0] || '').trim();
+    if (!vid || map[vid] === undefined) continue;
+    rows[r][11] = map[vid];
+    filled++;
+  }
+  return filled;
+}
+
+/**
+ * @param {string} channelId
+ * @param {string[]} videoIds
+ * @return {Object<string, number>}
+ */
+function fetchSubscribersGainedMap_(channelId, videoIds) {
+  var map = {};
+  if (!hasBrandYouTubeAuth_()) {
+    return map;
+  }
+
+  var endDate = Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
+  try {
+    for (var i = 0; i < videoIds.length; i += 50) {
+      var batch = videoIds.slice(i, i + 50);
+      var data = youtubeAnalyticsHttpGet_({
+        ids: 'channel==' + channelId,
+        startDate: '2014-10-01',
+        endDate: endDate,
+        metrics: 'subscribersGained',
+        dimensions: 'video',
+        filters: 'video==' + batch.join(','),
+        maxResults: String(Math.min(batch.length, 200))
+      });
+      var table = data.rows || [];
+      for (var r = 0; r < table.length; r++) {
+        var row = table[r];
+        if (!row || !row.length) continue;
+        map[String(row[0])] = Number(row[1]) || 0;
+      }
+    }
+  } catch (e) {
+    Logger.log('subscribersGained unavailable: ' + e.message);
+  }
+  return map;
+}
+
+/**
+ * YouTube Analytics API v2 reports.query via Brand OAuth token.
+ * @param {Object<string,string>} params
+ * @return {Object}
+ */
+function youtubeAnalyticsHttpGet_(params) {
+  var accessToken = getBrandAccessToken_();
+  var qs = [];
+  var keys = Object.keys(params);
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (params[k] === undefined || params[k] === null || params[k] === '') {
+      continue;
+    }
+    qs.push(encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k])));
+  }
+
+  var url =
+    'https://youtubeanalytics.googleapis.com/v2/reports?' + qs.join('&');
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: { Authorization: 'Bearer ' + accessToken },
+    muteHttpExceptions: true
+  });
+
+  var code = resp.getResponseCode();
+  var body = resp.getContentText();
+  if (code < 200 || code >= 300) {
+    throw new Error('YouTube Analytics HTTP ' + code + ':\n' + body);
+  }
+  return JSON.parse(body);
+}

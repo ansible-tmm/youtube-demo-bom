@@ -32,7 +32,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
+]
 CLIENT_SECRET = Path(__file__).resolve().parent / "client_secret.json"
 TOKEN_PATH = Path(__file__).resolve().parent / "token.json"
 

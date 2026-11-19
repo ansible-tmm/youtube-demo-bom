@@ -16,7 +16,8 @@
  */
 
 var BRAND_OAUTH_SERVICE_NAME = 'youtube-brand';
-var BRAND_OAUTH_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
+var BRAND_OAUTH_SCOPE =
+  'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly';
 
 /**
  * @return {GoogleAppsScriptOAuth2.OAuth2Service}
