@@ -139,6 +139,7 @@ function syncYouTube() {
   replaceRawSheet_(raw, rows);
   var viewCounts = writeStatusViews_(ss, rows);
   var appended = appendNewBomRows_(bom, rows);
+  sortBomNewestFirst_(bom);
   var repairResult = repairBomAutoFormulas_(bom);
   var repaired = repairResult.repaired;
   applyBomPresentation_(bom);
@@ -181,11 +182,12 @@ function syncYouTube() {
     '\n' +
     'Appended ' +
     appended +
-    ' new BOM row(s) at top (newest first).\n' +
+    ' new BOM row(s).\n' +
+    'BOM sorted newest-first by publish/schedule date.\n' +
     'Repaired auto formulas on ' +
     repaired +
     ' BOM row(s).\n' +
-    'Human columns and blank-Video-ID rows were left untouched.';
+    'Human columns stayed with their Video ID rows.';
 
   if (String(pulled.channel.authPath).indexOf('brand-oauth') === 0) {
     // ok
@@ -310,10 +312,11 @@ function replaceMachineSheet_(sheet, rows) {
 }
 
 /**
- * Insert new BOM rows at the top (row 2) so newest videos appear first.
- * Does not reorder existing rows. Human columns stay blank on new rows.
+ * Append new BOM rows at the bottom (auto formula columns only).
+ * Sync then calls sortBomNewestFirst_ so the sheet reads newest-first.
+ * Human columns stay blank on new rows.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
- * @param {Array[]} rawRows already newest-first
+ * @param {Array[]} rawRows
  * @return {number}
  */
 function appendNewBomRows_(bom, rawRows) {
@@ -333,9 +336,8 @@ function appendNewBomRows_(bom, rawRows) {
     return 0;
   }
 
-  // Keep raw order (newest first) at the top of BOM.
-  bom.insertRowsBefore(2, toAppend.length);
-  var startRow = 2;
+  var startRow = bom.getLastRow() + 1;
+  if (startRow < 2) startRow = 2;
   var width = CONFIG.BOM_HEADERS.length;
   var values = [];
 
@@ -357,6 +359,43 @@ function appendNewBomRows_(bom, rawRows) {
 
   applyBomDataValidation_(bom);
   return toAppend.length;
+}
+
+/**
+ * Menu: sort BOM by publish/schedule date, newest first (whole rows).
+ */
+function sortBomNewestFirst() {
+  var bom = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(
+    CONFIG.SHEETS.BOM
+  );
+  sortBomNewestFirst_(bom);
+  repairBomAutoFormulas_(bom);
+  try {
+    SpreadsheetApp.getUi().alert(
+      'BOM sorted newest-first by “Published or scheduled at”.\n' +
+        'Whole rows moved together (human columns stayed with their Video ID).'
+    );
+  } catch (e) {
+    Logger.log('BOM sorted newest first');
+  }
+}
+
+/**
+ * Full-row sort so Video ID + formulas + human columns stay aligned.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
+ */
+function sortBomNewestFirst_(bom) {
+  if (!bom) return;
+  var lastRow = bom.getLastRow();
+  if (lastRow < 3) return;
+
+  var lastCol = Math.max(bom.getLastColumn(), CONFIG.BOM_HEADERS.length);
+  SpreadsheetApp.flush();
+  // Col 5 = Published or scheduled at (XLOOKUP display values).
+  bom.getRange(2, 1, lastRow - 1, lastCol).sort({
+    column: 5,
+    ascending: false
+  });
 }
 
 /**

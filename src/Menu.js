@@ -8,6 +8,7 @@ function onOpen() {
     .addItem('Sync YouTube', 'syncYouTube')
     .addItem('Ensure sheet structure', 'ensureSheetStructure')
     .addItem('Repair BOM auto formulas', 'repairBomAutoFormulas')
+    .addItem('Sort BOM newest first', 'sortBomNewestFirst')
     .addSeparator()
     .addItem('List Brand OAuth channels', 'listBrandYouTubeChannels')
     .addItem('Debug Brand auth property lengths', 'debugBrandAuthPropertyLengths')
