@@ -139,7 +139,8 @@ function syncYouTube() {
   replaceRawSheet_(raw, rows);
   var viewCounts = writeStatusViews_(ss, rows);
   var appended = appendNewBomRows_(bom, rows);
-  var repaired = repairBomAutoFormulas_(bom);
+  var repairResult = repairBomAutoFormulas_(bom);
+  var repaired = repairResult.repaired;
   applyBomPresentation_(bom);
   orderUsefulTabs_(ss);
 
@@ -381,62 +382,102 @@ function repairBomAutoFormulas(bomOpt) {
   var bom =
     bomOpt ||
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEETS.BOM);
-  var n = repairBomAutoFormulas_(bom);
+  var result = repairBomAutoFormulas_(bom);
   try {
-    SpreadsheetApp.getUi().alert(
+    var msg =
       'Repaired auto formulas on ' +
-        n +
-        ' BOM row(s).\nHuman columns were not changed.\n\n' +
-        'If Title is still blank, that Video ID is missing from _youtube_raw — Sync YouTube.'
-    );
+      result.repaired +
+      ' BOM row(s).\nHuman columns were not changed.';
+    if (result.missingFromRaw.length) {
+      msg +=
+        '\n\nStill blank after repair — these Video IDs are not in _youtube_raw:\n' +
+        result.missingFromRaw.slice(0, 20).join('\n') +
+        (result.missingFromRaw.length > 20
+          ? '\n…and ' + (result.missingFromRaw.length - 20) + ' more'
+          : '') +
+        '\n\nRun YouTube BOM → Sync YouTube to refresh the feed.';
+    } else if (result.repaired === 0) {
+      msg += '\n\nNo broken auto rows found.';
+    }
+    SpreadsheetApp.getUi().alert(msg);
   } catch (e) {
-    Logger.log('Repaired ' + n + ' BOM rows');
+    Logger.log('Repaired ' + result.repaired + ' BOM rows');
   }
-  return n;
+  return result.repaired;
 }
 
 /**
+ * Restore B–J formulas when missing, pointed at the wrong row (partial sort
+ * with Video ID hidden), or Title still blank. Never touches human cols (K+).
  * @param {GoogleAppsScript.Spreadsheet.Sheet} bom
- * @return {number}
+ * @return {{repaired: number, missingFromRaw: string[]}}
  */
 function repairBomAutoFormulas_(bom) {
-  if (!bom) return 0;
+  var empty = { repaired: 0, missingFromRaw: [] };
+  if (!bom) return empty;
   var lastRow = bom.getLastRow();
-  if (lastRow < 2) return 0;
+  if (lastRow < 2) return empty;
 
   var numRows = lastRow - 1;
   var ids = bom.getRange(2, 1, numRows, 1).getValues();
   var titleFormulas = bom.getRange(2, 2, numRows, 1).getFormulas();
   var titleValues = bom.getRange(2, 2, numRows, 1).getDisplayValues();
+  var rawIds = collectRawVideoIds_();
   var repaired = 0;
+  var missingFromRaw = [];
 
   for (var i = 0; i < ids.length; i++) {
     var videoId = String(ids[i][0] || '').trim();
     if (!videoId) continue;
 
+    var rowNum = i + 2;
     var formula = String(titleFormulas[i][0] || '');
-    // Only rewrite when Title has no XLOOKUP (Video ID–only / broken after partial sort).
-    // If XLOOKUP exists but displays blank, ID is missing from _youtube_raw — Sync instead.
-    if (formula && formula.indexOf('XLOOKUP') !== -1) {
-      continue;
+    var display = String(titleValues[i][0] || '').trim();
+    var expectedRef = '$A' + rowNum;
+    var hasLookup = formula.toUpperCase().indexOf('XLOOKUP') !== -1;
+    var pointsAtThisRow = formula.indexOf(expectedRef) !== -1;
+    // Partial sorts (esp. with col A hidden) leave XLOOKUP pointed at another row.
+    var needsRepair = !hasLookup || !pointsAtThisRow || !display;
+
+    if (needsRepair) {
+      var auto = new Array(CONFIG.BOM_AUTO_FORMULA_COUNT + 1);
+      writeBomAutoFormulasIntoRow_(auto, rowNum);
+      var out = [];
+      for (var c = 1; c <= CONFIG.BOM_AUTO_FORMULA_COUNT; c++) {
+        out.push(auto[c]);
+      }
+      bom.getRange(rowNum, 2, 1, CONFIG.BOM_AUTO_FORMULA_COUNT).setValues([out]);
+      bom.getRange(rowNum, 5).setNumberFormat('yyyy-mm-dd hh:mm');
+      bom.getRange(rowNum, 9).setNumberFormat('@');
+      bom.getRange(rowNum, 10).setNumberFormat('yyyy-mm-dd hh:mm');
+      repaired++;
     }
 
-    var rowNum = i + 2;
-    var auto = new Array(CONFIG.BOM_AUTO_FORMULA_COUNT + 1);
-    writeBomAutoFormulasIntoRow_(auto, rowNum);
-    // Columns B–J = indexes 1–9 of auto row (skip Video ID at 0)
-    var out = [];
-    for (var c = 1; c <= CONFIG.BOM_AUTO_FORMULA_COUNT; c++) {
-      out.push(auto[c]);
+    if (!rawIds[videoId]) {
+      missingFromRaw.push(videoId);
     }
-    bom.getRange(rowNum, 2, 1, CONFIG.BOM_AUTO_FORMULA_COUNT).setValues([out]);
-    bom.getRange(rowNum, 5).setNumberFormat('yyyy-mm-dd hh:mm');
-    bom.getRange(rowNum, 9).setNumberFormat('@');
-    bom.getRange(rowNum, 10).setNumberFormat('yyyy-mm-dd hh:mm');
-    repaired++;
   }
 
-  return repaired;
+  SpreadsheetApp.flush();
+  return { repaired: repaired, missingFromRaw: missingFromRaw };
+}
+
+/**
+ * @return {Object<string, boolean>}
+ */
+function collectRawVideoIds_() {
+  var map = {};
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var raw = ss.getSheetByName(CONFIG.SHEETS.RAW);
+  if (!raw) return map;
+  var lastRow = raw.getLastRow();
+  if (lastRow < 2) return map;
+  var values = raw.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < values.length; i++) {
+    var id = String(values[i][0] || '').trim();
+    if (id) map[id] = true;
+  }
+  return map;
 }
 
 /**
