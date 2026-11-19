@@ -174,6 +174,11 @@ function syncYouTube() {
     '/' +
     (pulled.channel.extraResolved || 0) +
     '\n' +
+    'BOM orphans re-fetched: ' +
+    (pulled.channel.bomOrphansRequested || 0) +
+    '/' +
+    (pulled.channel.bomOrphansResolved || 0) +
+    '\n' +
     'Appended ' +
     appended +
     ' new BOM row(s) at top (newest first).\n' +

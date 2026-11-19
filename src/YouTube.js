@@ -350,6 +350,7 @@ function pullChannelVideos_() {
   }
 
   var extraIds = loadExtraVideoIds_();
+  var bomOrphanIds = loadBomOrphanVideoIds_(ids, extraIds);
   var seen = {};
   for (var i = 0; i < ids.length; i++) {
     seen[ids[i]] = true;
@@ -361,15 +362,27 @@ function pullChannelVideos_() {
       merged.push(extraIds[e]);
     }
   }
+  // BOM rows whose IDs fell out of the uploads playlist (still on channel).
+  for (var b = 0; b < bomOrphanIds.length; b++) {
+    if (!seen[bomOrphanIds[b]]) {
+      seen[bomOrphanIds[b]] = true;
+      merged.push(bomOrphanIds[b]);
+    }
+  }
 
   var rows = useBrand
     ? fetchVideoDetailsHttp_(merged)
     : fetchVideoDetails_(merged);
 
   var resolvedExtra = 0;
+  var resolvedBomOrphans = 0;
   for (var r = 0; r < rows.length; r++) {
-    if (extraIds.indexOf(rows[r][0]) !== -1) {
+    var rid = rows[r][0];
+    if (extraIds.indexOf(rid) !== -1) {
       resolvedExtra++;
+    }
+    if (bomOrphanIds.indexOf(rid) !== -1) {
+      resolvedBomOrphans++;
     }
   }
 
@@ -381,8 +394,45 @@ function pullChannelVideos_() {
 
   channel.extraRequested = extraIds.length;
   channel.extraResolved = resolvedExtra;
+  channel.bomOrphansRequested = bomOrphanIds.length;
+  channel.bomOrphansResolved = resolvedBomOrphans;
 
   return { channel: channel, rows: rows };
+}
+
+/**
+ * BOM Video IDs that are not in the uploads playlist or _extra_video_ids.
+ * Some channel videos (esp. older / unlisted) can fall out of uploads.
+ * @param {string[]} uploadIds
+ * @param {string[]} extraIds
+ * @return {string[]}
+ */
+function loadBomOrphanVideoIds_(uploadIds, extraIds) {
+  var known = {};
+  for (var i = 0; i < uploadIds.length; i++) {
+    known[uploadIds[i]] = true;
+  }
+  for (var e = 0; e < extraIds.length; e++) {
+    known[extraIds[e]] = true;
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var bom = ss.getSheetByName(CONFIG.SHEETS.BOM);
+  if (!bom) return [];
+
+  var lastRow = bom.getLastRow();
+  if (lastRow < 2) return [];
+
+  var values = bom.getRange(2, 1, lastRow - 1, 1).getValues();
+  var orphans = [];
+  var seen = {};
+  for (var r = 0; r < values.length; r++) {
+    var id = String(values[r][0] || '').trim();
+    if (!id || known[id] || seen[id]) continue;
+    seen[id] = true;
+    orphans.push(id);
+  }
+  return orphans;
 }
 
 /**
